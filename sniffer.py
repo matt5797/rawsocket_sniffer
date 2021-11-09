@@ -242,29 +242,29 @@ class HTTP(Application):
         
 class Packet(object):
     def __init__(self, raw_data):
-        self.raw_data = raw_data
-        link_str = raw_data[:14]
-        network_str = raw_data[14:34]
-        self.ether_header = EtherHeader(link_str)
-        self.ip_header = IPHeader(network_str)
-        trans_offset = 14 + self.ip_header.hdr_size
-        trans_str = raw_data[trans_offset:trans_offset + 20]
-        if self.ip_header.proto_str=="TCP":
-            self.trans_header = TCPHeader(trans_str)
-            payload_offset = 14 + self.ip_header.hdr_size + self.trans_header.hdr_size
-            if (self.trans_header.src_port in [80,8080] or self.trans_header.dst_port in [80,8080]) and len(self.raw_data)>payload_offset:
-                try:
+        try:
+            self.raw_data = raw_data
+            link_str = raw_data[:14]
+            network_str = raw_data[14:34]
+            self.ether_header = EtherHeader(link_str)
+            self.ip_header = IPHeader(network_str)
+            trans_offset = 14 + self.ip_header.hdr_size
+            trans_str = raw_data[trans_offset:trans_offset + 20]
+            if self.ip_header.proto_str=="TCP":
+                self.trans_header = TCPHeader(trans_str)
+                payload_offset = 14 + self.ip_header.hdr_size + self.trans_header.hdr_size
+                if (self.trans_header.src_port in [80,8080] or self.trans_header.dst_port in [80,8080]) and len(self.raw_data)>payload_offset:
                     self.app_header = HTTP(self.raw_data[payload_offset:])
-                except Exception as ex:
-                    print(ex)
-                    print("error packet: ", self.raw_data)
+                else:
+                    self.app_header = Application(self.raw_data[payload_offset:])
             else:
-                self.app_header = Application(self.raw_data[payload_offset:])
-        else:
-            pass
-            #self.trans_header = Transport(trans_str) #임시, 수정필
-            #payload_offset = 14 + self.ip_header.hdr_size + self.trans_header.hdr_size
-            #self.app_header = Application(self.raw_data[payload_offset:])
+                pass
+                #self.trans_header = Transport(trans_str) #임시, 수정필
+                #payload_offset = 14 + self.ip_header.hdr_size + self.trans_header.hdr_size
+                #self.app_header = Application(self.raw_data[payload_offset:])
+        except Exception as ex:
+            print(ex)
+            print("error packet: ", self.raw_data)
         
     def dump(self, num=0, opts=['ETH', 'IP', 'TRANSPORT', 'APPLICATION']):
         print_section_header("PACKET {}".format(num), 2)
