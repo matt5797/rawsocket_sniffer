@@ -252,8 +252,12 @@ class Packet(object):
         if self.ip_header.proto_str=="TCP":
             self.trans_header = TCPHeader(trans_str)
             payload_offset = 14 + self.ip_header.hdr_size + self.trans_header.hdr_size
-            if (self.trans_header.src_port == 80 or self.trans_header.dst_port == 80) and len(self.raw_data)>payload_offset:
-                self.app_header = HTTP(self.raw_data[payload_offset:])
+            if (self.trans_header.src_port in [80,8080] or self.trans_header.dst_port in [80,8080]) and len(self.raw_data)>payload_offset:
+                try:
+                    self.app_header = HTTP(self.raw_data[payload_offset:])
+                except Exception as ex:
+                    print(ex)
+                    print("error packet: ", self.raw_data)
             else:
                 self.app_header = Application(self.raw_data[payload_offset:])
         else:
@@ -262,7 +266,7 @@ class Packet(object):
             #payload_offset = 14 + self.ip_header.hdr_size + self.trans_header.hdr_size
             #self.app_header = Application(self.raw_data[payload_offset:])
         
-    def dump(self, num, opts=['ETH', 'IP', 'TRANSPORT', 'APPLICATION']):
+    def dump(self, num=0, opts=['ETH', 'IP', 'TRANSPORT', 'APPLICATION']):
         print_section_header("PACKET {}".format(num), 2)
         
         if 'ETH' in opts:
@@ -285,14 +289,14 @@ def sniffing(host, opts):
         raw_data, addr = sniffer.recvfrom(65565)
         packet = Packet(raw_data)
         if packet.ip_header.proto_str in opts[0]:    #옵션 만들어야됨
-            if packet.app_header.protocol in opts[1]:
+            if packet.trans_header.dst_port in opts[1] or packet.trans_header.src_port in opts[1]:
                 packet.dump(i, opts[2])
 
 def main():
     print(gethostname())
     host = gethostbyname(gethostname())
     print('start sniffing {0}'.format(host))
-    sniffing('127.0.0.1', (['TCP'], ['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0'], ['ETH', 'IP', 'TRANSPORT', 'APPLICATION']))
+    sniffing('127.0.0.1', (['TCP'], [80, 8080], ['ETH', 'IP', 'TRANSPORT', 'APPLICATION']))
 
 
 if __name__ == "__main__":
