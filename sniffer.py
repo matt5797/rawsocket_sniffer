@@ -64,27 +64,6 @@ class NetworkHeader():
         print_section_footer(1)
 
 
-class ICMPHeader(NetworkHeader):
-    def __init__(self, hdr_str):
-        self.type = "ICMP"
-        hdr_unpacked = unpack("!BBHL", hdr_str)
-        
-        self.icmp_type = hdr_unpacked[0]
-        self.code = hdr_unpacked[1]
-        self.check_sum = hdr_unpacked[2]
-        self.message = hdr_unpacked[3]
-
-    def dump(self):
-        print_section_header("IP HEADER", 1)
-
-        print("ICMP Type : {} ({})".format(self.icmp_type))
-        print("ICMP CODE : {} bytes".format(self.code))
-        print("Checksum : {}".format(self.check_sum))
-        print("Message : {}".format(self.message))
-
-        print_section_footer(1)
-
-
 class IPHeader(NetworkHeader):
     def __init__(self, hdr_str):
         self.type = "IP"
@@ -158,6 +137,39 @@ class TransportHeader():
     def dump(self):
         print_section_header("Network HEADER", 1)
         print_section_footer(1)
+
+
+class ICMPHeader(TransportHeader):
+    def __init__(self, hdr_str):
+        self.type = "ICMP"
+        hdr_unpacked = unpack("!BBHL", hdr_str[:8])
+        
+        self.icmp_type = hdr_unpacked[0]
+        self.code = hdr_unpacked[1]
+        self.check_sum = hdr_unpacked[2]
+        self.message = hdr_unpacked[3]
+        if len(hdr_str[8:]) > 0:
+            self.message2 = hdr_str[8:]
+        else:
+            self.message2 = None
+        self.hdr_size = len(hdr_str)
+
+    def dump(self):
+        print_section_header("IP HEADER", 1)
+
+        print("ICMP Type : {} ({})".format(self.icmp_type, self.get_icmp_type(self.icmp_type)))
+        print("ICMP CODE : {}".format(self.code))
+        print("Checksum : {}".format(self.check_sum))
+        print("Message : {}".format(self.message))
+
+        print_section_footer(1)
+
+    def get_icmp_type(self, src):
+        IPVersions = {8:"Echo request", 0: "Echo reply"}
+        if src not in IPVersions.keys():
+            return "Unknown"
+        return IPVersions[src]
+
 
 class UDPHeader(TransportHeader):
     def __init__(self, hdr_str):
@@ -360,6 +372,9 @@ class Packet():
             offset = 14 + self.network_header.hdr_size
             if len(self.raw_data)<=offset:
                 return None
+            elif self.network_header.proto_str=="ICMP":
+                data = self.raw_data[offset:]
+                return ICMPHeader(data)
             elif self.network_header.proto_str=="TCP":
                 data = self.raw_data[offset:offset + 20]
                 return TCPHeader(data)
@@ -397,7 +412,8 @@ def main():
     print('start sniffing {0}'.format(host))
     # 필터 형식: ([필수 프로토콜], [제외 프로토콜], [출력 단위])
     #sniffing('127.0.0.1', (['ICMP', 'Ethernet', 'TCP'], [], ['datalink', 'network', 'transport', 'application']))
-    sniffing('127.0.0.1', (['TCP'], [], ['datalink', 'network', 'transport', 'application']))
+    #sniffing('127.0.0.1', (['IP'], [], ['datalink', 'network', 'transport', 'application']))
+    sniffing('127.0.0.1', (['ICMP'], [], ['datalink', 'network', 'transport', 'application']))
 
 
 if __name__ == "__main__":
