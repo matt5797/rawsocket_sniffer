@@ -20,19 +20,28 @@ def print_section_footer(level=0):
         print("{:-^78}".format(""))
 
 
-class EtherHeader(object):
+class DataLinkHeader():
     def __init__(self, hdr_str):
+        pass
+        
+    def dump(self):
+        print_section_header("DataLink HEADER", 1)
+        print_section_footer(1)
+        
+class EthernetHeader(DataLinkHeader):
+    def __init__(self, hdr_str):
+        self.type = "Ethernet"
         dest, src, eth_type = unpack('! 6s 6s H', hdr_str)
         self.dest_mac = self.get_mac_addr(dest)
         self.src_mac = self.get_mac_addr(src)
-        self.eth_type = htons(eth_type)
+        self.eth_type = eth_type
         self.eth_type_str = self.get_eth_type(self.eth_type)
 
     def dump(self):
-        print_section_header("Ether HEADER", 1)
+        print_section_header("Ethernet HEADER", 1)
         print("Source MAC : {}".format(self.src_mac))
         print("Destination MAC : {}".format(self.dest_mac))
-        print("Ether Type : {} ({})".format(hex(self.eth_type), self.eth_type_str))
+        print("Ethernet Type : {} ({})".format(hex(self.eth_type), self.eth_type_str))
         print_section_footer(1)
 
     def get_mac_addr(self, src):
@@ -43,10 +52,42 @@ class EtherHeader(object):
         EtherTypes = {0x0800 : "IPv4", 0x0806 : "ARP", 0x8035 : "RARP", 0x814c : "SNMP", 0x86dd : "IPv6"}
         if src not in EtherTypes.keys():
             return "Unknown"
-        return self.EtherTypes[src]
+        return EtherTypes[src]
 
-class IPHeader(object):
+
+class NetworkHeader():
     def __init__(self, hdr_str):
+        return
+    
+    def dump(self):
+        print_section_header("Network HEADER", 1)
+        print_section_footer(1)
+
+
+class ICMPHeader(NetworkHeader):
+    def __init__(self, hdr_str):
+        self.type = "ICMP"
+        hdr_unpacked = unpack("!BBHL", hdr_str)
+        
+        self.icmp_type = hdr_unpacked[0]
+        self.code = hdr_unpacked[1]
+        self.check_sum = hdr_unpacked[2]
+        self.message = hdr_unpacked[3]
+
+    def dump(self):
+        print_section_header("IP HEADER", 1)
+
+        print("ICMP Type : {} ({})".format(self.icmp_type))
+        print("ICMP CODE : {} bytes".format(self.code))
+        print("Checksum : {}".format(self.check_sum))
+        print("Message : {}".format(self.message))
+
+        print_section_footer(1)
+
+
+class IPHeader(NetworkHeader):
+    def __init__(self, hdr_str):
+        self.type = "IP"
         hdr_unpacked = unpack("!BBHHHBBH4s4s", hdr_str)
 
         self.ver = hdr_unpacked[0] >> 4
@@ -98,10 +139,8 @@ class IPHeader(object):
 
     def get_ip_flag(self, flag_bits):
         result = []
-        # 2번째 비트
         if flag_bits & 0b11 >> 1:
             result.append("DF")
-        # 3번째 비트
         if flag_bits & 0b1:
             result.append("MF")
         
@@ -111,17 +150,40 @@ class IPHeader(object):
             return "--"
 
         
-class Transport(object):
+class TransportHeader():
     def __init__(self, hdr_str):
-        hdr_unpacked = unpack("!HHLLHHHH", hdr_str)
+        print(hdr_str)
+        return
 
-        self.src_port = 0 #hdr_unpacked[0]
-        self.dst_port = 0 #hdr_unpacked[1]
-        self.hdr_size = 0
+    def dump(self):
+        print_section_header("Network HEADER", 1)
+        print_section_footer(1)
 
-
-class TCPHeader(Transport):
+class UDPHeader(TransportHeader):
     def __init__(self, hdr_str):
+        self.type = "UDP"
+        hdr_unpacked = unpack("!HHHH", hdr_str)
+
+        self.src_port = hdr_unpacked[0]
+        self.dst_port = hdr_unpacked[1]
+        self.length = hdr_unpacked[2]
+        self.check_sum = hdr_unpacked[3]
+        self.hdr_size = 8
+
+    def dump(self):
+        print_section_header("UDP HEADER", 1)
+
+        print("Source Port : {}".format(self.src_port))
+        print("Destination Port : {}".format(self.dst_port))
+        print("UDP Length : {} bytes".format(self.length))
+        print("Checksum : {}".format(self.check_sum))
+
+        print_section_footer(1)
+
+        
+class TCPHeader(TransportHeader):
+    def __init__(self, hdr_str):
+        self.type = "TCP"
         hdr_unpacked = unpack("!HHLLHHHH", hdr_str)
 
         self.src_port = hdr_unpacked[0]
@@ -176,17 +238,19 @@ class TCPHeader(Transport):
             return "--"
 
 
-class Application(object):
+class ApplicationData():
     def __init__(self, payload):
         self.payload_raw = payload
         self.payload = payload
         self.protocol = "Unknown"
         
     def dump(self):
-        pass
+        print_section_header("Application HEADER", 1)
+        print_section_footer(1)
         
-class HTTP(Application):
+class HTTPData(ApplicationData):
     def __init__(self, payload):
+        self.type = "HTTP"
         self.payload_raw = payload
         self.payload = payload.decode('ascii')
         
@@ -240,46 +304,79 @@ class HTTP(Application):
             
         print_section_footer(1)
         
-class Packet(object):
+class Packet():
     def __init__(self, raw_data):
         try:
             self.raw_data = raw_data
-            link_str = raw_data[:14]
-            network_str = raw_data[14:34]
-            self.ether_header = EtherHeader(link_str)
-            self.ip_header = IPHeader(network_str)
-            trans_offset = 14 + self.ip_header.hdr_size
-            trans_str = raw_data[trans_offset:trans_offset + 20]
-            if self.ip_header.proto_str=="TCP":
-                self.trans_header = TCPHeader(trans_str)
-                payload_offset = 14 + self.ip_header.hdr_size + self.trans_header.hdr_size
-                if (self.trans_header.src_port in [80,8080] or self.trans_header.dst_port in [80,8080]) and len(self.raw_data)>payload_offset:
-                    self.app_header = HTTP(self.raw_data[payload_offset:])
-                else:
-                    self.app_header = Application(self.raw_data[payload_offset:])
-            else:
-                pass
-                #self.trans_header = Transport(trans_str) #임시, 수정필
-                #payload_offset = 14 + self.ip_header.hdr_size + self.trans_header.hdr_size
-                #self.app_header = Application(self.raw_data[payload_offset:])
+            self.datalink_header = self.get_datalink_header()
+            self.network_header = self.get_network_header()
+            self.transport_header = self.get_transport_header()
+            self.application_data = self.get_application_data()
         except Exception as ex:
             print(ex)
             print("error packet: ", self.raw_data)
+            
+    def is_filtered(self, opts):
+        types = [x.type for x in [self.datalink_header, self.network_header, self.transport_header, self.application_data] if x]
         
-    def dump(self, num=0, opts=['ETH', 'IP', 'TRANSPORT', 'APPLICATION']):
+        if len(opts[0])>0 and len(set(types).intersection(set(opts[0])))==0:
+            return False
+        if len(opts[1])>0 and len(set(types).intersection(set(opts[1])))>0:
+            return False
+        else:
+            return True
+        
+    def dump(self, num=0, opts=['datalink', 'network', 'transport', 'application']):
         print_section_header("PACKET {}".format(num), 2)
         
-        if 'ETH' in opts:
-            self.ether_header.dump()
-        if 'IP' in opts:
-            self.ip_header.dump()
-        if 'TRANSPORT' in opts:
-            self.trans_header.dump()
-        if 'APPLICATION' in opts:
-            if hasattr(self, 'trans_header'):    #계층 생성 후 삭제
-                self.app_header.dump()
+        if self.datalink_header and 'datalink' in opts:
+            self.datalink_header.dump()
+        if self.network_header and 'network' in opts:
+            self.network_header.dump()
+        if self.transport_header and 'transport' in opts:
+            self.transport_header.dump()
+        if self.application_data and 'application' in opts:
+            self.application_data.dump()
             
         print_section_footer(2)
+        
+    def get_datalink_header(self):
+        data = self.raw_data[:14]
+        if True:
+            return EthernetHeader(data)
+        return None
+    
+    def get_network_header(self):
+        offset = 14
+        if len(self.raw_data)<=offset:
+            return None
+        if True:
+            data = self.raw_data[offset:offset+20]
+            return IPHeader(data)
+        return None
+    
+    def get_transport_header(self):
+        if self.network_header:
+            offset = 14 + self.network_header.hdr_size
+            if len(self.raw_data)<=offset:
+                return None
+            elif self.network_header.proto_str=="TCP":
+                data = self.raw_data[offset:offset + 20]
+                return TCPHeader(data)
+            elif self.network_header.proto_str=="UDP":
+                data = self.raw_data[offset:offset + 8]
+                return UDPHeader(data)
+        return None
+        
+    def get_application_data(self):
+        if self.transport_header:
+            offset = 14 + self.network_header.hdr_size + self.transport_header.hdr_size
+            data = self.raw_data[offset:]
+            if len(self.raw_data)<=offset:
+                return None
+            elif (self.transport_header.src_port in [80,8080] or self.transport_header.dst_port in [80,8080]):
+                return HTTPData(data)
+        return None
 
 
 def sniffing(host, opts):
@@ -288,15 +385,19 @@ def sniffing(host, opts):
     for i in range(1000):
         raw_data, addr = sniffer.recvfrom(65565)
         packet = Packet(raw_data)
-        if packet.ip_header.proto_str in opts[0]:    #옵션 만들어야됨
-            if packet.trans_header.dst_port in opts[1] or packet.trans_header.src_port in opts[1]:
-                packet.dump(i, opts[2])
+        if packet.is_filtered(opts):
+            packet.dump(i, opts[2])
+        #if len(opts[0])==0 or packet.network_header.proto_str in opts[0]:    #옵션 만들어야됨
+        #    if len(opts[1])==0 or (packet.transport_header.dst_port in opts[1] or packet.transport_header.src_port in opts[1]):
+        #        packet.dump(i, opts[2])
 
 def main():
     print(gethostname())
     host = gethostbyname(gethostname())
     print('start sniffing {0}'.format(host))
-    sniffing('127.0.0.1', (['TCP'], [80, 8080], ['ETH', 'IP', 'TRANSPORT', 'APPLICATION']))
+    # 필터 형식: ([필수 프로토콜], [제외 프로토콜], [출력 단위])
+    #sniffing('127.0.0.1', (['ICMP', 'Ethernet', 'TCP'], [], ['datalink', 'network', 'transport', 'application']))
+    sniffing('127.0.0.1', (['TCP'], [], ['datalink', 'network', 'transport', 'application']))
 
 
 if __name__ == "__main__":
