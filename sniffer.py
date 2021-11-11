@@ -21,7 +21,7 @@ def print_section_footer(level=0):
 
 
 class DataLinkHeader():
-    def __init__(self, hdr_str):
+    def __init__(self, data):
         pass
         
     def dump(self):
@@ -29,13 +29,14 @@ class DataLinkHeader():
         print_section_footer(1)
         
 class EthernetHeader(DataLinkHeader):
-    def __init__(self, hdr_str):
+    def __init__(self, data):
         self.type = "Ethernet"
-        dest, src, eth_type = unpack('! 6s 6s H', hdr_str)
+        dest, src, eth_type = unpack('! 6s 6s H', data[:14])
         self.dest_mac = self.get_mac_addr(dest)
         self.src_mac = self.get_mac_addr(src)
         self.eth_type = eth_type
         self.eth_type_str = self.get_eth_type(self.eth_type)
+        self.data = data[14:]
 
     def dump(self):
         print_section_header("Ethernet HEADER", 1)
@@ -56,7 +57,7 @@ class EthernetHeader(DataLinkHeader):
 
 
 class NetworkHeader():
-    def __init__(self, hdr_str):
+    def __init__(self, data):
         return
     
     def dump(self):
@@ -65,9 +66,9 @@ class NetworkHeader():
 
 
 class IPHeader(NetworkHeader):
-    def __init__(self, hdr_str):
+    def __init__(self, data):
         self.type = "IP"
-        hdr_unpacked = unpack("!BBHHHBBH4s4s", hdr_str)
+        hdr_unpacked = unpack("!BBHHHBBH4s4s", data[:20])
 
         self.ver = hdr_unpacked[0] >> 4
         self.ver_str = self.get_ip_version(self.ver)
@@ -84,6 +85,7 @@ class IPHeader(NetworkHeader):
         self.check_sum = hdr_unpacked[7]
         self.src_ip = inet_ntoa(hdr_unpacked[8])
         self.dst_ip = inet_ntoa(hdr_unpacked[9])
+        self.data = data[self.hdr_size:]
 
     def dump(self):
         print_section_header("IP HEADER", 1)
@@ -130,8 +132,8 @@ class IPHeader(NetworkHeader):
 
         
 class TransportHeader():
-    def __init__(self, hdr_str):
-        print(hdr_str)
+    def __init__(self, data):
+        print(data)
         return
 
     def dump(self):
@@ -140,47 +142,106 @@ class TransportHeader():
 
 
 class ICMPHeader(TransportHeader):
-    def __init__(self, hdr_str):
+    def __init__(self, data):
         self.type = "ICMP"
-        hdr_unpacked = unpack("!BBHL", hdr_str[:8])
+        hdr_unpacked = unpack("!BBHL", data[:8])
         
         self.icmp_type = hdr_unpacked[0]
-        self.code = hdr_unpacked[1]
+        self.icmp_code = hdr_unpacked[1]
         self.check_sum = hdr_unpacked[2]
         self.message = hdr_unpacked[3]
-        if len(hdr_str[8:]) > 0:
-            self.message2 = hdr_str[8:]
+        if len(data[8:]) > 0:
+            self.message2 = data[8:]
         else:
             self.message2 = None
-        self.hdr_size = len(hdr_str)
+        self.hdr_size = len(data)
+        self.data = data[self.hdr_size:]
 
     def dump(self):
         print_section_header("IP HEADER", 1)
 
-        print("ICMP Type : {} ({})".format(self.icmp_type, self.get_icmp_type(self.icmp_type)))
-        print("ICMP CODE : {}".format(self.code))
+        print("ICMP Type : {} ({})".format(self.icmp_type, self.get_icmp_type()))
+        print("ICMP Code : {} ({})".format(self.icmp_code, self.get_icmp_code()))
         print("Checksum : {}".format(self.check_sum))
         print("Message : {}".format(self.message))
 
         print_section_footer(1)
 
-    def get_icmp_type(self, src):
-        IPVersions = {8:"Echo request", 0: "Echo reply"}
-        if src not in IPVersions.keys():
+    def get_icmp_type(self):
+        ICMPType = {0: "Echo Reply", 
+                    3: "Destination Unreachable", 
+                    4: "Source quench",
+                    5: "Redirect",
+                    8: "Echo request", 
+                    9: "Router advertisement",
+                    10: "Router selection",
+                    11: "Time Exceeded",
+                    12: "Parameter problem",
+                    13: "Timestamp",
+                    14: "Timestamp reply",
+                    15: "Information request",
+                    16: "Information reply",
+                    17: "Address mask request",
+                    18: "Address mask reply",
+                    30: "Traceroute",
+                   }
+        if self.icmp_type not in ICMPType.keys():
             return "Unknown"
-        return IPVersions[src]
+        return ICMPType[self.icmp_type]
+
+    def get_icmp_code(self):
+        ICMPCode = {3: {
+                        0: "Net is unreachable",
+                        1: "Host is unreachable",
+                        2: "Protocol is unreachable",
+                        3: "Port is unreachable",
+                        4: "Fragmentation is needed and Don't Fragment was set",
+                        5: "Source route failed",
+                        6: "Destination network is unknown",
+                        7: "Destination host is unknown",
+                        8: "Source host is isolated",
+                        9: "Communication with destination network is administratively prohibited",
+                        10: "Communication with destination host is administratively prohibited",
+                        11: "Destination network is unreachable for type of service",
+                        12: "Destination host is unreachable for type of service",
+                        13: "Communication is administratively prohibited",
+                        14: "Host precedence violation",
+                        15: "Precedence cutoff is in effect",
+                    },
+                    5: {
+                        0: "Redirect datagram for the network (or subnet)",
+                        1: "Redirect datagram for the host",
+                        2: "Redirect datagram for the type of service and network",
+                        3: "Redirect datagram for the type of service and host",
+                    },
+                    11: {
+                        0: "Time to Live exceeded in transit",
+                        1: "Fragment reassembly time exceeded",
+                    },
+                    12: {
+                        0: "Pointer indicates the error",
+                        1: "Missing a required option",
+                        2: "Bad length",
+                    }
+                     }
+        if self.icmp_type not in ICMPCode.keys():
+            return ""
+        if self.icmp_code not in ICMPCode[self.icmp_type].keys():
+            return "Unknown"
+        return ICMPCode[self.icmp_type][self.icmp_code]
 
 
 class UDPHeader(TransportHeader):
-    def __init__(self, hdr_str):
+    def __init__(self, data):
         self.type = "UDP"
-        hdr_unpacked = unpack("!HHHH", hdr_str)
+        hdr_unpacked = unpack("!HHHH", data[:8])
 
         self.src_port = hdr_unpacked[0]
         self.dst_port = hdr_unpacked[1]
         self.length = hdr_unpacked[2]
         self.check_sum = hdr_unpacked[3]
         self.hdr_size = 8
+        self.data = data[self.hdr_size:]
 
     def dump(self):
         print_section_header("UDP HEADER", 1)
@@ -194,9 +255,9 @@ class UDPHeader(TransportHeader):
 
         
 class TCPHeader(TransportHeader):
-    def __init__(self, hdr_str):
+    def __init__(self, data):
         self.type = "TCP"
-        hdr_unpacked = unpack("!HHLLHHHH", hdr_str)
+        hdr_unpacked = unpack("!HHLLHHHH", data[:20])
 
         self.src_port = hdr_unpacked[0]
         self.dst_port = hdr_unpacked[1]
@@ -207,6 +268,7 @@ class TCPHeader(TransportHeader):
         self.win_size = hdr_unpacked[5]
         self.check_sum = hdr_unpacked[6]
         self.urg_ptr = hdr_unpacked[7]
+        self.data = data[self.hdr_size:]
 
     def dump(self):
         print_section_header("TCP HEADER", 1)
@@ -320,13 +382,14 @@ class Packet():
     def __init__(self, raw_data):
         try:
             self.raw_data = raw_data
-            self.datalink_header = self.get_datalink_header()
-            self.network_header = self.get_network_header()
-            self.transport_header = self.get_transport_header()
-            self.application_data = self.get_application_data()
+            self.datalink_header, data = self.get_datalink_header(raw_data)
+            self.network_header, data = self.get_network_header(data)
+            self.transport_header, data = self.get_transport_header(data)
+            self.application_data = self.get_application_data(data)
         except Exception as ex:
             print(ex)
             print("error packet: ", self.raw_data)
+            self.dump()
             
     def is_filtered(self, opts):
         types = [x.type for x in [self.datalink_header, self.network_header, self.transport_header, self.application_data] if x]
@@ -352,70 +415,73 @@ class Packet():
             
         print_section_footer(2)
         
-    def get_datalink_header(self):
-        data = self.raw_data[:14]
-        if True:
-            return EthernetHeader(data)
-        return None
-    
-    def get_network_header(self):
-        offset = 14
-        if len(self.raw_data)<=offset:
-            return None
-        if True:
-            data = self.raw_data[offset:offset+20]
-            return IPHeader(data)
-        return None
-    
-    def get_transport_header(self):
-        if self.network_header:
-            offset = 14 + self.network_header.hdr_size
-            if len(self.raw_data)<=offset:
-                return None
-            elif self.network_header.proto_str=="ICMP":
-                data = self.raw_data[offset:]
-                return ICMPHeader(data)
-            elif self.network_header.proto_str=="TCP":
-                data = self.raw_data[offset:offset + 20]
-                return TCPHeader(data)
-            elif self.network_header.proto_str=="UDP":
-                data = self.raw_data[offset:offset + 8]
-                return UDPHeader(data)
-        return None
+    def dump_summary(self, num=0):
+        if self.network_header and self.transport_header:
+            print("PACKET #{} / {}:{} -> {}:{} / ({})".format(num, self.network_header.src_ip, self.transport_header.src_port,  self.network_header.dst_ip, self.transport_header.dst_port, self.network_header.proto_str))
         
-    def get_application_data(self):
+    def get_datalink_header(self, data):
+        if True:
+            eth = EthernetHeader(data)
+            return eth, eth.data
+        return None, None
+    
+    def get_network_header(self, data):
+        if len(data)==0:
+            return None, None
+        if True:
+            ip = IPHeader(data)
+            return ip, ip.data
+        return None, None
+    
+    def get_transport_header(self, data):
+        if self.network_header:
+            if len(self.raw_data)==0:
+                return None, None
+            elif self.network_header.proto_str=="ICMP":
+                icmp = ICMPHeader(data)
+                return icmp, icmp.data
+            elif self.network_header.proto_str=="TCP":
+                tcp =  TCPHeader(data)
+                return tcp, tcp.data
+            elif self.network_header.proto_str=="UDP":
+                udp =  UDPHeader(data)
+                return udp, udp.data
+        return None, None
+        
+    def get_application_data(self, data):
         if self.transport_header:
-            offset = 14 + self.network_header.hdr_size + self.transport_header.hdr_size
-            data = self.raw_data[offset:]
-            if len(self.raw_data)<=offset:
+            if len(data)==0:
                 return None
             elif (self.transport_header.src_port in [80,8080] or self.transport_header.dst_port in [80,8080]):
                 return HTTPData(data)
         return None
 
 
-def sniffing(host, opts):
-    sniffer = socket(AF_PACKET, SOCK_RAW, ntohs(0x0003))
+class Sniffer():
+    def __init__(self):
+        self.hostname = gethostname()
+        self.host = gethostbyname(self.hostname)
+        self.sniffer = socket(AF_PACKET, SOCK_RAW, ntohs(0x0003))
     
-    for i in range(1000):
-        raw_data, addr = sniffer.recvfrom(65565)
-        packet = Packet(raw_data)
-        if packet.is_filtered(opts):
-            packet.dump(i, opts[2])
-        #if len(opts[0])==0 or packet.network_header.proto_str in opts[0]:    #옵션 만들어야됨
-        #    if len(opts[1])==0 or (packet.transport_header.dst_port in opts[1] or packet.transport_header.src_port in opts[1]):
-        #        packet.dump(i, opts[2])
+    def sniffing(self, cnt, opts, summary=False):
+        for i in range(cnt):
+            raw_data, addr = self.sniffer.recvfrom(65565)
+            packet = Packet(raw_data)
+            if packet.is_filtered(opts) and not summary:
+                packet.dump(i, opts[2])
+            elif packet.is_filtered(opts) and summary:
+                packet.dump_summary(i)
 
-def main():
-    print(gethostname())
-    host = gethostbyname(gethostname())
-    print('start sniffing {0}'.format(host))
-    # 필터 형식: ([필수 프로토콜], [제외 프로토콜], [출력 단위])
-    #sniffing('127.0.0.1', (['ICMP', 'Ethernet', 'TCP'], [], ['datalink', 'network', 'transport', 'application']))
-    #sniffing('127.0.0.1', (['IP'], [], ['datalink', 'network', 'transport', 'application']))
-    sniffing('127.0.0.1', (['ICMP'], [], ['datalink', 'network', 'transport', 'application']))
+    def main(self, ):
+        print(self.hostname)
+        print('start sniffing {0}'.format(self.host))
+        # 필터 형식: ([필수 프로토콜], [제외 프로토콜], [출력 단위])
+        # 프로토콜: Ethernet, IP, ICMP, 'TCP', 'UDP'
+        # 출력 단위: datalink, network, transport, application
+        #sniffing('127.0.0.1', (['ICMP', 'Ethernet', 'TCP'], [], ['datalink', 'network', 'transport', 'application']))
+        self.sniffing(1000, ([], [], ['network']))
 
 
 if __name__ == "__main__":
-    main()
+    Sniffer().main()
 
