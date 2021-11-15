@@ -1,8 +1,9 @@
 from socket import *
 from struct import unpack
 import binascii
-    
-        
+from argparse import ArgumentParser
+
+
 def print_section_header(src, level=0):
     if level==2:
         print("{:#^78}".format(" " + src + " "))
@@ -10,7 +11,8 @@ def print_section_header(src, level=0):
         print("{:=^78}".format(" " + src + " "))
     else:
         print("{:-^78}".format(" " + src + " "))
-    
+
+
 def print_section_footer(level=0):
     if level==2:
         print("{:#^78}".format(""))
@@ -23,11 +25,12 @@ def print_section_footer(level=0):
 class DataLinkHeader():
     def __init__(self, data):
         pass
-        
+
     def dump(self):
         print_section_header("DataLink HEADER", 1)
         print_section_footer(1)
-        
+
+
 class EthernetHeader(DataLinkHeader):
     def __init__(self, data):
         self.type = "Ethernet"
@@ -59,13 +62,13 @@ class EthernetHeader(DataLinkHeader):
 class NetworkHeader():
     def __init__(self, data):
         return
-    
+
     def dump(self):
         print_section_header("Network HEADER", 1)
         print_section_footer(1)
 
 
-class IPHeader(NetworkHeader):
+class IPv4Header(NetworkHeader):
     def __init__(self, data):
         self.type = "IP"
         hdr_unpacked = unpack("!BBHHHBBH4s4s", data[:20])
@@ -113,7 +116,18 @@ class IPHeader(NetworkHeader):
         return IPVersions[src]
 
     def get_trans_proto(self, src):
-        TransportProtocols = {1:"ICMP", 6: "TCP", 17: "UDP"}
+        TransportProtocols = {1:"ICMP",
+                              2: "IGMP",
+                              6: "TCP",
+                              9: "IGRP",
+                              17: "UDP",
+                              47: "GRE",
+                              50: "ESP",
+                              51: "AH",
+                              57: "SKIP",
+                              88: "EIGRP",
+                              89: "OSPF",
+                              115: "L2TP"}
         if src not in TransportProtocols.keys():
             return "Unknown"
         return TransportProtocols[src]
@@ -124,13 +138,13 @@ class IPHeader(NetworkHeader):
             result.append("DF")
         if flag_bits & 0b1:
             result.append("MF")
-        
+
         if result:
             return ",".join(result)
         else:
             return "--"
 
-        
+
 class TransportHeader():
     def __init__(self, data):
         print(data)
@@ -145,7 +159,7 @@ class ICMPHeader(TransportHeader):
     def __init__(self, data):
         self.type = "ICMP"
         hdr_unpacked = unpack("!BBHL", data[:8])
-        
+
         self.icmp_type = hdr_unpacked[0]
         self.icmp_code = hdr_unpacked[1]
         self.check_sum = hdr_unpacked[2]
@@ -156,6 +170,8 @@ class ICMPHeader(TransportHeader):
             self.message2 = None
         self.hdr_size = len(data)
         self.data = data[self.hdr_size:]
+        self.src_port = 0
+        self.dst_port = 0
 
     def dump(self):
         print_section_header("IP HEADER", 1)
@@ -253,7 +269,7 @@ class UDPHeader(TransportHeader):
 
         print_section_footer(1)
 
-        
+
 class TCPHeader(TransportHeader):
     def __init__(self, data):
         self.type = "TCP"
@@ -317,21 +333,22 @@ class ApplicationData():
         self.payload_raw = payload
         self.payload = payload
         self.protocol = "Unknown"
-        
+
     def dump(self):
         print_section_header("Application HEADER", 1)
         print_section_footer(1)
-        
+
+
 class HTTPData(ApplicationData):
     def __init__(self, payload):
         self.type = "HTTP"
         self.payload_raw = payload
         self.payload = payload.decode('ascii')
-        
+
         headers, body = self.payload.split('\r\n\r\n')
         headers = headers.split('\r\n')
         start_line = headers.pop(0).split(' ')
-        
+
         self.result = {}
         if start_line[0] in ['POST', 'GET', 'HEAD', 'PUT', 'DELETE']:    # 요청일때
             self.result['request'], self.result['headers'] = {}, {}
@@ -351,33 +368,34 @@ class HTTPData(ApplicationData):
             self.protocol = self.result['response']['protocol']
         else:
             self.protocol = "Unknown HTTP"
-        
+
     def dump(self):
         if 'request' in self.result.keys():
             print_section_header("HTTP REQUEST", 1)
             for key, value in self.result['request'].items():
                 print("{}: {}".format(key, value))
-                
+
             print_section_header("headers", 0)
             for key, value in self.result['headers'].items():
                 print("{}: {}".format(key, value))
-                
+
             print_section_header("body", 0)
             print("{}: {}".format('body', self.result['body']))
         else:
             print_section_header("HTTP RESPONSE", 1)
             for key, value in self.result['response'].items():
                 print("{}: {}".format(key, value))
-                
+
             print_section_header("headers", 0)
             for key, value in self.result['headers'].items():
                 print("{}: {}".format(key, value))
-                
+
             print_section_header("body", 0)
             print("{}: {}".format('body', self.result['body']))
-            
+
         print_section_footer(1)
-        
+
+
 class Packet():
     def __init__(self, raw_data):
         try:
@@ -390,20 +408,24 @@ class Packet():
             print(ex)
             print("error packet: ", self.raw_data)
             self.dump()
-            
+
     def is_filtered(self, opts):
         types = [x.type for x in [self.datalink_header, self.network_header, self.transport_header, self.application_data] if x]
-        
-        if len(opts[0])>0 and len(set(types).intersection(set(opts[0])))==0:
+
+        if opts[0] and len(set(types).intersection(set(opts[0])))==0:
             return False
-        if len(opts[1])>0 and len(set(types).intersection(set(opts[1])))>0:
+        if opts[1] and len(set(types).intersection(set(opts[1])))>0:
+            return False
+        if opts[2] and self.transport_header and self.transport_header.src_port not in opts[2]:
+            return False
+        if opts[3] and self.transport_header and self.transport_header.dst_port not in opts[3]:
             return False
         else:
             return True
-        
+
     def dump(self, num=0, opts=['datalink', 'network', 'transport', 'application']):
         print_section_header("PACKET {}".format(num), 2)
-        
+
         if self.datalink_header and 'datalink' in opts:
             self.datalink_header.dump()
         if self.network_header and 'network' in opts:
@@ -412,27 +434,28 @@ class Packet():
             self.transport_header.dump()
         if self.application_data and 'application' in opts:
             self.application_data.dump()
-            
+
         print_section_footer(2)
-        
+        print('\n')
+
     def dump_summary(self, num=0):
         if self.network_header and self.transport_header:
             print("PACKET #{} / {}:{} -> {}:{} / ({})".format(num, self.network_header.src_ip, self.transport_header.src_port,  self.network_header.dst_ip, self.transport_header.dst_port, self.network_header.proto_str))
-        
+
     def get_datalink_header(self, data):
         if True:
             eth = EthernetHeader(data)
             return eth, eth.data
         return None, None
-    
+
     def get_network_header(self, data):
         if len(data)==0:
             return None, None
         if True:
-            ip = IPHeader(data)
+            ip = IPv4Header(data)
             return ip, ip.data
         return None, None
-    
+
     def get_transport_header(self, data):
         if self.network_header:
             if len(self.raw_data)==0:
@@ -447,7 +470,7 @@ class Packet():
                 udp =  UDPHeader(data)
                 return udp, udp.data
         return None, None
-        
+
     def get_application_data(self, data):
         if self.transport_header:
             if len(data)==0:
@@ -462,26 +485,40 @@ class Sniffer():
         self.hostname = gethostname()
         self.host = gethostbyname(self.hostname)
         self.sniffer = socket(AF_PACKET, SOCK_RAW, ntohs(0x0003))
-    
+
     def sniffing(self, cnt, opts, summary=False):
         for i in range(cnt):
             raw_data, addr = self.sniffer.recvfrom(65565)
             packet = Packet(raw_data)
             if packet.is_filtered(opts) and not summary:
-                packet.dump(i, opts[2])
+                if opts[-1]:
+                    packet.dump(i, opts[-1])
+                else:
+                    packet.dump(i)
             elif packet.is_filtered(opts) and summary:
                 packet.dump_summary(i)
 
-    def main(self, ):
+    def main(self, args):
         print(self.hostname)
         print('start sniffing {0}'.format(self.host))
-        # 필터 형식: ([필수 프로토콜], [제외 프로토콜], [출력 단위])
-        # 프로토콜: Ethernet, IP, ICMP, 'TCP', 'UDP'
-        # 출력 단위: datalink, network, transport, application
-        #sniffing('127.0.0.1', (['ICMP', 'Ethernet', 'TCP'], [], ['datalink', 'network', 'transport', 'application']))
-        self.sniffing(1000, ([], [], ['network']))
+        print('options: ', args)
+        self.sniffing(1000, (args.necessary_proto, args.except_proto, args.sorceport, args.destport, args.display_layer))
+
+
+def argparser():
+    parser = ArgumentParser()
+    parser.add_argument('-sp', '--sorceport', action='append', type=int, help='sorce port')
+    parser.add_argument('-dp', '--destport', action='append', type=int, help='destination port')
+
+    parser.add_argument('-np', '--necessary_proto', action='append', type=str, help='necessary protocol: [Ethernet, IP, ICMP, TCP, UDP]')
+    parser.add_argument('-ep', '--except_proto', action='append', type=str, help='except protocol: [Ethernet, IP, ICMP, TCP, UDP]')
+
+    parser.add_argument('-dl', '--display_layer', action='append', type=str, help='display layer: [datalink, network, transport, application]')
+
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    Sniffer().main()
+    args = argparser()
+    Sniffer().main(args)
 

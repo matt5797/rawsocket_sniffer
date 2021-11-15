@@ -1,0 +1,7 @@
+Server:		10.1.0.2
+Address:	10.1.0.2#53
+
+Non-authoritative answer:
+Name:	ns.kpu.ac.kr
+Address: 210.93.48.196
+

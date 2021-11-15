@@ -1,0 +1,226 @@
+goorm
+start sniffing 172.17.0.17
+options:  Namespace(destport=[80, 8080], display_layer=None, except_proto=None, necessary_proto=None, sorceport=None)
+################################# PACKET 10 ##################################
+============================== Ethernet HEADER ===============================
+Source MAC : 02:42:ac:11:00:11
+Destination MAC : 02:42:73:ac:21:50
+Ethernet Type : 0x800 (IPv4)
+==============================================================================
+================================= IP HEADER ==================================
+Version : 4 (IPv4)
+IP Header Length : 20 bytes
+Diff Services : 0
+Expl Congestion Notification : 0
+Total Length : 60 bytes
+Identification : 0x7228
+Flags : --
+Fragment Offset : 0
+TTL : 64
+Protocol : 6 (TCP)
+Checksum : 0x19e1
+Source IP : 172.17.0.17
+Destination IP : 210.93.48.51
+==============================================================================
+================================= TCP HEADER =================================
+Source Port : 60902
+Destination Port : 80
+Sequence Number : 706763179
+Acknowledgement number : 0
+TCP Header Length : 40 bytes
+TCP Flags : SYN
+Window size : 29200
+Checksum : 44769
+Urgent Pointer : 0
+==============================================================================
+##############################################################################
+
+
+################################# PACKET 12 ##################################
+============================== Ethernet HEADER ===============================
+Source MAC : 02:42:ac:11:00:11
+Destination MAC : 02:42:73:ac:21:50
+Ethernet Type : 0x800 (IPv4)
+==============================================================================
+================================= IP HEADER ==================================
+Version : 4 (IPv4)
+IP Header Length : 20 bytes
+Diff Services : 0
+Expl Congestion Notification : 0
+Total Length : 40 bytes
+Identification : 0x7229
+Flags : --
+Fragment Offset : 0
+TTL : 64
+Protocol : 6 (TCP)
+Checksum : 0x19f4
+Source IP : 172.17.0.17
+Destination IP : 210.93.48.51
+==============================================================================
+================================= TCP HEADER =================================
+Source Port : 60902
+Destination Port : 80
+Sequence Number : 706763180
+Acknowledgement number : 7430558
+TCP Header Length : 20 bytes
+TCP Flags : ACK
+Window size : 58
+Checksum : 44749
+Urgent Pointer : 0
+==============================================================================
+##############################################################################
+
+
+################################# PACKET 13 ##################################
+============================== Ethernet HEADER ===============================
+Source MAC : 02:42:ac:11:00:11
+Destination MAC : 02:42:73:ac:21:50
+Ethernet Type : 0x800 (IPv4)
+==============================================================================
+================================= IP HEADER ==================================
+Version : 4 (IPv4)
+IP Header Length : 20 bytes
+Diff Services : 0
+Expl Congestion Notification : 0
+Total Length : 208 bytes
+Identification : 0x722a
+Flags : --
+Fragment Offset : 0
+TTL : 64
+Protocol : 6 (TCP)
+Checksum : 0x194b
+Source IP : 172.17.0.17
+Destination IP : 210.93.48.51
+==============================================================================
+================================= TCP HEADER =================================
+Source Port : 60902
+Destination Port : 80
+Sequence Number : 706763180
+Acknowledgement number : 7430558
+TCP Header Length : 20 bytes
+TCP Flags : ACK,PSH
+Window size : 58
+Checksum : 44917
+Urgent Pointer : 0
+==============================================================================
+================================ HTTP REQUEST ================================
+method: POST
+url: /
+version: HTTP/1.1
+---------------------------------- headers -----------------------------------
+Host: www.kpu.ac.kr
+User-Agent: curl/7.58.0
+Accept: */*
+Content-Length: 21
+Content-Type: application/x-www-form-urlencoded
+------------------------------------ body ------------------------------------
+body: key=value&key2=value2
+==============================================================================
+##############################################################################
+
+
+################################# PACKET 15 ##################################
+============================== Ethernet HEADER ===============================
+Source MAC : 02:42:ac:11:00:11
+Destination MAC : 02:42:73:ac:21:50
+Ethernet Type : 0x800 (IPv4)
+==============================================================================
+================================= IP HEADER ==================================
+Version : 4 (IPv4)
+IP Header Length : 20 bytes
+Diff Services : 0
+Expl Congestion Notification : 0
+Total Length : 40 bytes
+Identification : 0x722b
+Flags : --
+Fragment Offset : 0
+TTL : 64
+Protocol : 6 (TCP)
+Checksum : 0x19f2
+Source IP : 172.17.0.17
+Destination IP : 210.93.48.51
+==============================================================================
+================================= TCP HEADER =================================
+Source Port : 60902
+Destination Port : 80
+Sequence Number : 706763348
+Acknowledgement number : 7431690
+TCP Header Length : 20 bytes
+TCP Flags : ACK
+Window size : 62
+Checksum : 44749
+Urgent Pointer : 0
+==============================================================================
+##############################################################################
+
+
+################################# PACKET 18 ##################################
+============================== Ethernet HEADER ===============================
+Source MAC : 02:42:ac:11:00:11
+Destination MAC : 02:42:73:ac:21:50
+Ethernet Type : 0x800 (IPv4)
+==============================================================================
+================================= IP HEADER ==================================
+Version : 4 (IPv4)
+IP Header Length : 20 bytes
+Diff Services : 0
+Expl Congestion Notification : 0
+Total Length : 40 bytes
+Identification : 0x722c
+Flags : --
+Fragment Offset : 0
+TTL : 64
+Protocol : 6 (TCP)
+Checksum : 0x19f1
+Source IP : 172.17.0.17
+Destination IP : 210.93.48.51
+==============================================================================
+================================= TCP HEADER =================================
+Source Port : 60902
+Destination Port : 80
+Sequence Number : 706763348
+Acknowledgement number : 7431690
+TCP Header Length : 20 bytes
+TCP Flags : ACK,FIN
+Window size : 62
+Checksum : 44749
+Urgent Pointer : 0
+==============================================================================
+##############################################################################
+
+
+################################# PACKET 22 ##################################
+============================== Ethernet HEADER ===============================
+Source MAC : 02:42:ac:11:00:11
+Destination MAC : 02:42:73:ac:21:50
+Ethernet Type : 0x800 (IPv4)
+==============================================================================
+================================= IP HEADER ==================================
+Version : 4 (IPv4)
+IP Header Length : 20 bytes
+Diff Services : 0
+Expl Congestion Notification : 0
+Total Length : 40 bytes
+Identification : 0x722d
+Flags : --
+Fragment Offset : 0
+TTL : 64
+Protocol : 6 (TCP)
+Checksum : 0x19f0
+Source IP : 172.17.0.17
+Destination IP : 210.93.48.51
+==============================================================================
+================================= TCP HEADER =================================
+Source Port : 60902
+Destination Port : 80
+Sequence Number : 706763349
+Acknowledgement number : 7431691
+TCP Header Length : 20 bytes
+TCP Flags : ACK
+Window size : 62
+Checksum : 44749
+Urgent Pointer : 0
+==============================================================================
+##############################################################################
+
+

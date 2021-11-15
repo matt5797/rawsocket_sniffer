@@ -1,0 +1,63 @@
+goorm
+start sniffing 172.17.0.17
+options:  Namespace(destport=[53], display_layer=None, except_proto=None, necessary_proto=None, sorceport=None)
+################################## PACKET 8 ##################################
+============================== Ethernet HEADER ===============================
+Source MAC : 02:42:ac:11:00:11
+Destination MAC : 02:42:73:ac:21:50
+Ethernet Type : 0x800 (IPv4)
+==============================================================================
+================================= IP HEADER ==================================
+Version : 4 (IPv4)
+IP Header Length : 20 bytes
+Diff Services : 0
+Expl Congestion Notification : 0
+Total Length : 58 bytes
+Identification : 0x87f8
+Flags : --
+Fragment Offset : 0
+TTL : 64
+Protocol : 17 (UDP)
+Checksum : 0x3c96
+Source IP : 172.17.0.17
+Destination IP : 10.1.0.2
+==============================================================================
+================================= UDP HEADER =================================
+Source Port : 55719
+Destination Port : 53
+UDP Length : 38 bytes
+Checksum : 46684
+==============================================================================
+##############################################################################
+
+
+################################# PACKET 10 ##################################
+============================== Ethernet HEADER ===============================
+Source MAC : 02:42:ac:11:00:11
+Destination MAC : 02:42:73:ac:21:50
+Ethernet Type : 0x800 (IPv4)
+==============================================================================
+================================= IP HEADER ==================================
+Version : 4 (IPv4)
+IP Header Length : 20 bytes
+Diff Services : 0
+Expl Congestion Notification : 0
+Total Length : 58 bytes
+Identification : 0x87f9
+Flags : --
+Fragment Offset : 0
+TTL : 64
+Protocol : 17 (UDP)
+Checksum : 0x3c95
+Source IP : 172.17.0.17
+Destination IP : 10.1.0.2
+==============================================================================
+================================= UDP HEADER =================================
+Source Port : 59006
+Destination Port : 53
+UDP Length : 38 bytes
+Checksum : 46684
+==============================================================================
+##############################################################################
+
+
