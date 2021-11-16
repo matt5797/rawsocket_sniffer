@@ -1,9 +1,13 @@
-root@goorm:/workspace/rawsocket_sniffer(main)# nslookup ns.kpu.ac.kr > DNS2.txt
+nslookup -type=ns google.com > DNS2.txt
 
 Server:		10.1.0.2
 Address:	10.1.0.2#53
 
 Non-authoritative answer:
-Name:	ns.kpu.ac.kr
-Address: 210.93.48.196
+google.com	nameserver = ns1.google.com.
+google.com	nameserver = ns2.google.com.
+google.com	nameserver = ns3.google.com.
+google.com	nameserver = ns4.google.com.
+
+Authoritative answers can be found from:
 

@@ -1,12 +1,12 @@
-root@goorm:/workspace/rawsocket_sniffer(main)# python sniffer.py -dp 53 > DNS.txt
+python sniffer.py -sp 53 -dp 53 > DNS.txt
 
 goorm
-start sniffing 172.17.0.17
-options:  Namespace(destport=[53], display_layer=None, except_proto=None, necessary_proto=None, sorceport=None)
-################################## PACKET 8 ##################################
+start sniffing 172.17.0.10
+options:  Namespace(destport=[53], display_layer=None, except_proto=None, necessary_proto=None, sorceport=[53], summary=False)
+################################## PACKET 5 ##################################
 ============================== Ethernet HEADER ===============================
-Source MAC : 02:42:ac:11:00:11
-Destination MAC : 02:42:73:ac:21:50
+Source MAC : 02:42:ac:11:00:0a
+Destination MAC : 02:42:e0:6e:1d:b2
 Ethernet Type : 0x800 (IPv4)
 ==============================================================================
 ================================= IP HEADER ==================================
@@ -14,29 +14,40 @@ Version : 4 (IPv4)
 IP Header Length : 20 bytes
 Diff Services : 0
 Expl Congestion Notification : 0
-Total Length : 58 bytes
-Identification : 0x87f8
+Total Length : 56 bytes
+Identification : 0xd3e8
 Flags : --
 Fragment Offset : 0
 TTL : 64
 Protocol : 17 (UDP)
-Checksum : 0x3c96
-Source IP : 172.17.0.17
+Checksum : 0xf0ae
+Source IP : 172.17.0.10
 Destination IP : 10.1.0.2
 ==============================================================================
 ================================= UDP HEADER =================================
-Source Port : 55719
+Source Port : 54187
 Destination Port : 53
-UDP Length : 38 bytes
-Checksum : 46684
+UDP Length : 36 bytes
+Checksum : 46675
+==============================================================================
+================================= DNS HEADER =================================
+Identifier : 0xdda0
+Flags: 0x0100 (QR=0 OPCODE=0000 AA=0 TC=0 RD=1 RA=0 Z=000 RCODE=0000)
+Number of Question Records : 1
+Number of Answer Records : 0
+Number of Authoritative Records : 0
+Number of Additional Records : 0
+Query Name : google.com
+Query Type : 0x0002 (NS)
+Query Class : 0x0001 (IN)
 ==============================================================================
 ##############################################################################
 
 
-################################# PACKET 10 ##################################
+################################## PACKET 6 ##################################
 ============================== Ethernet HEADER ===============================
-Source MAC : 02:42:ac:11:00:11
-Destination MAC : 02:42:73:ac:21:50
+Source MAC : 02:42:e0:6e:1d:b2
+Destination MAC : 02:42:ac:11:00:0a
 Ethernet Type : 0x800 (IPv4)
 ==============================================================================
 ================================= IP HEADER ==================================
@@ -44,21 +55,60 @@ Version : 4 (IPv4)
 IP Header Length : 20 bytes
 Diff Services : 0
 Expl Congestion Notification : 0
-Total Length : 58 bytes
-Identification : 0x87f9
+Total Length : 128 bytes
+Identification : 0x0000
 Flags : --
 Fragment Offset : 0
-TTL : 64
+TTL : 254
 Protocol : 17 (UDP)
-Checksum : 0x3c95
-Source IP : 172.17.0.17
-Destination IP : 10.1.0.2
+Checksum : 0xc64e
+Source IP : 10.1.0.2
+Destination IP : 172.17.0.10
 ==============================================================================
 ================================= UDP HEADER =================================
-Source Port : 59006
-Destination Port : 53
-UDP Length : 38 bytes
-Checksum : 46684
+Source Port : 53
+Destination Port : 54187
+UDP Length : 108 bytes
+Checksum : 57892
+==============================================================================
+================================= DNS HEADER =================================
+Identifier : 0xdda0
+Flags: 0x8180 (QR=1 OPCODE=0000 AA=0 TC=0 RD=1 RA=1 Z=000 RCODE=0000)
+Number of Question Records : 1
+Number of Answer Records : 4
+Number of Authoritative Records : 0
+Number of Additional Records : 0
+Query Name : google.com
+Query Type : 0x0002 (NS)
+Query Class : 0x0001 (IN)
+---------------------------------- Message -----------------------------------
+NAME : google.com
+TYPE : 0x0002 (NS)
+CLASS : 0x0001 (IN)
+TTL : 86400 sec
+RDLENGTH : 6 byte(s)
+RDATA :  036e 7331 c00c (NSDName=ns1.google.com)
+---------------------------------- Message -----------------------------------
+NAME : google.com
+TYPE : 0x0002 (NS)
+CLASS : 0x0001 (IN)
+TTL : 86400 sec
+RDLENGTH : 6 byte(s)
+RDATA :  036e 7334 c00c (NSDName=ns4.google.com)
+---------------------------------- Message -----------------------------------
+NAME : google.com
+TYPE : 0x0002 (NS)
+CLASS : 0x0001 (IN)
+TTL : 86400 sec
+RDLENGTH : 6 byte(s)
+RDATA :  036e 7332 c00c (NSDName=ns2.google.com)
+---------------------------------- Message -----------------------------------
+NAME : google.com
+TYPE : 0x0002 (NS)
+CLASS : 0x0001 (IN)
+TTL : 86400 sec
+RDLENGTH : 6 byte(s)
+RDATA :  036e 7333 c00c (NSDName=ns3.google.com)
 ==============================================================================
 ##############################################################################
 

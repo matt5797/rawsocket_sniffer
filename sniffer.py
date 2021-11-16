@@ -2,6 +2,7 @@ from socket import *
 from struct import unpack
 import binascii
 from argparse import ArgumentParser
+from io import BytesIO
 
 
 def print_section_header(src, level=0):
@@ -20,6 +21,37 @@ def print_section_footer(level=0):
         print("{:=^78}".format(""))
     else:
         print("{:-^78}".format(""))
+
+
+def get_hex_data(data):
+    h = binascii.hexlify(data).decode()
+    return " ".join([h[i:i+4] for i in range(0, len(h), 4)])
+
+
+def get_IPv6_addr(data):
+    groups = [i.lstrip("0") for i in get_hex_data(data).split(" ")]
+    empties, start = [], -1
+    for i, v in enumerate(groups):
+        if not v:
+            if start == -1:
+                start = i
+        elif start != -1:  # end of empty sequence
+            empties.append((start, i-start))
+            start = -1
+    if empties:  # reduce: delete longest zero sequence
+        longest, ii = (-1, -1), -1
+        for i, v in enumerate(empties):
+            if v[1] > longest[1]:
+                longest, ii = v, i
+        del empties[ii]
+        for i in empties:
+            for j in range(i[1]):
+                groups[i[0]+j] = "0"
+        for i in range(longest[1]-1):
+            del groups[longest[0]]
+        if longest[0] == 0:  # if :: is at the beginning
+            groups[longest[0]] = ":"
+    return ":".join(groups)
 
 
 class DataLinkHeader():
@@ -340,6 +372,168 @@ class ApplicationData():
         print_section_footer(1)
 
 
+class DNS():
+    def get_query_type(self, src):
+        QueryTypes = {0x0001: "A",
+                      0x0002: "NS",
+                      0x0005: "CNAME",
+                      0x0006: "SOA",
+                      0x000c: "PTR",
+                      0x000f: "MX",
+                      0x001c: "AAAA"}
+        if src not in QueryTypes.keys():
+            return "Unknown"
+        return QueryTypes[src]
+    
+    def get_query_class(self, src):
+        QueryClass = {0x0001: "IN",
+                     0x0003: "CH",
+                     0x0004: "HS"}
+        if src not in QueryClass.keys():
+            return "Unknown"
+        return QueryClass[src]
+    
+    def readDNSstr(self, data):
+        parts = []
+        realparts = []
+        pl = ord(data.read(1))
+        while pl:
+            if pl >= 0b11000000:
+                data.seek(data.tell()-1)
+                pointer = data.read(2)
+                realparts.append(binascii.hexlify(pointer).decode())
+                offset = unpack("!H", pointer)[0] & 0x3fff
+                fp = data.tell()
+                data.seek(offset)
+                parts.append(self.readDNSstr(data)[0])  # recursive
+                data.seek(fp)
+                break
+            else:
+                s = data.read(pl)
+                realparts += [binascii.hexlify(chr(pl).encode()).decode(), binascii.hexlify(s).decode()]
+                parts.append(s.decode())
+            pl = ord(data.read(1))
+        if not pl:
+            realparts.append('00')
+        return ".".join(parts), realparts
+    
+    def alterIdna(self, s):
+        s2 = s.encode().decode('idna')
+        return s if s == s2 else " / ".join([s, s2])
+    
+
+class DNSMessage(DNS):
+    def __init__(self, data):
+        self.name, self.namep = self.readDNSstr(data)
+        self.type, self.qclass, self.ttl, self.rdlength = unpack('!HHLH', data.read(10))
+        self.type_str = self.get_query_type(self.type)
+        self.rdatap = data.tell()
+        self.rdata = data.read(self.rdlength)
+        data.seek(self.rdatap)
+
+        if self.type_str == "A":
+            self.rdata2 = unpack('!4s', data.read(4))[0]
+        elif self.type_str == "PTR":
+            self.PTRDName = self.readDNSstr(data)[0]
+        elif self.type_str == "SOA":
+            self.MName = self.readDNSstr(data)[0]
+            self.RName = self.readDNSstr(data)[0]
+            self.Serial, self.Refresh, self.Retry, self.Expire, self.Minimum = unpack('!LLLLL', data.read(20))
+        elif self.type_str == "CNAME":
+            self.CName = self.readDNSstr(data)[0]
+        elif self.type_str == "NS":
+            self.NSDName = self.readDNSstr(data)[0]
+        elif self.type_str == "MX":
+            self.Preference = unpack('!H', data.read(2))[0]
+            self.Exchange = self.readDNSstr(data)[0]
+        elif self.type_str == "AAAA":
+            self.rdata2 = unpack('!16s', data.read(16))[0]
+        else:
+            data.read(self.rdlength)
+
+    def dump(self):
+        print_section_header("Message", 0)
+        print("NAME : %s" % (self.alterIdna(self.name)))
+        print("TYPE : 0x%04x" % self.type, "(%s)" % self.type_str)
+        print("CLASS : 0x%04x" % self.qclass, "(%s)" % self.get_query_class(self.qclass))
+        print("TTL : {0:d} sec".format(self.ttl))
+        print("RDLENGTH : {0:d} byte(s)".format(self.rdlength))
+        print("RDATA : ", get_hex_data(self.rdata), end=' ')
+
+        if self.type_str == "A":
+            print("(IP %s)" % ".".join([str(b) for b in self.rdata2]))
+        elif self.type_str == "PTR":
+            print("(PTRDName=%s)" % self.PTRDName)
+        elif self.type_str == "SOA":
+            print("(MName=%s, RName=%s, Serial=0x%08x, Refresh=%ds, Retry=%ds, "
+                  "Expire=%ds, Minimum=%ds)" % (self.MName, self.RName.replace(".", "@", 1),
+                                                self.Serial, self.Refresh, self.Retry, self.Expire,
+                                                self.Minimum))
+        elif self.type_str == "CNAME":
+            print("(CName=%s)" % self.CName)
+        elif self.type_str == "NS":
+            print("(NSDName=%s)" % self.NSDName)
+        elif self.type_str == "MX":
+            print("(Preference=%d, Exchange=%s)" % (self.Preference, self.Exchange))
+        elif self.type_str == "AAAA":
+            print("(IPv6 %s)" % get_IPv6_addr(self.rdata2))
+        else:
+            print('')
+
+
+class DNSData(ApplicationData, DNS):
+    def __init__(self, payload):
+        self.type = "DNS"
+        data = BytesIO(payload)
+        
+        hdr_unpacked = unpack("!HHHHHH", data.read(12))
+        
+        self.identifier = hdr_unpacked[0]
+        self.flag = hdr_unpacked[1]
+        self.quest_num = hdr_unpacked[2]
+        self.answer_num = hdr_unpacked[3]
+        self.author_num = hdr_unpacked[4]
+        self.addition_num = hdr_unpacked[5]
+        
+        self.QR, self.OPCODE, self.AA, self.TC, self.RD, self.RA, self.Z, self.RCODE = self.parseHeaderFlagField(self.flag)
+        
+        self.query_name, self.qnamep = self.readDNSstr(data)
+        self.query_type, self.query_class = unpack('!HH', data.read(4))
+        
+        self.answer_list = []
+        for _ in range(self.answer_num + self.author_num + self.addition_num):
+            self.answer_list.append(DNSMessage(data))
+
+    def dump(self):
+        print_section_header("DNS HEADER", 1)
+
+        print("Identifier : 0x{0:04x}".format(self.identifier))
+        print("Flags: 0x%04x" % self.flag, "(QR="+self.QR, "OPCODE="+self.OPCODE, "AA="+self.AA, "TC="+self.TC, "RD="+self.RD, "RA="+self.RA, "Z="+self.Z, "RCODE="+self.RCODE+")")
+        print("Number of Question Records : {}".format(self.quest_num))
+        print("Number of Answer Records : {}".format(self.answer_num))
+        print("Number of Authoritative Records : {}".format(self.author_num))
+        print("Number of Additional Records : {}".format(self.addition_num))
+        print("Query Name : {}".format(self.query_name))
+        print("Query Type : 0x{0:04x} ({1})".format(self.query_type, self.get_query_type(self.query_type)))
+        print("Query Class : 0x{0:04x} ({1})".format(self.query_class, self.get_query_class(self.query_class)))
+        
+        for i in range(len(self.answer_list)):
+            self.answer_list[i].dump()
+        
+        print_section_footer(1)
+    
+    def parseHeaderFlagField(self, flags):
+        QR = str(flags >> 15)
+        OPCODE = str(flags >> 11 & 0b1111).rjust(4, '0')
+        AA = str(flags >> 10 & 1)
+        TC = str(flags >> 9 & 1)
+        RD = str(flags >> 8 & 1)
+        RA = str(flags >> 7 & 1)
+        Z = str(flags >> 4 & 0b111).rjust(3, '0')
+        RCODE = str(flags & 0b1111).rjust(4, '0')
+        return QR, OPCODE, AA, TC, RD, RA, Z, RCODE
+
+
 class HTTPData(ApplicationData):
     def __init__(self, payload):
         self.type = "HTTP"
@@ -351,7 +545,7 @@ class HTTPData(ApplicationData):
         start_line = headers.pop(0).split(' ')
 
         self.result = {}
-        if start_line[0] in ['POST', 'GET', 'HEAD', 'PUT', 'DELETE']:    # 요청일때
+        if start_line[0] in ['POST', 'GET', 'HEAD', 'PUT', 'DELETE']:
             self.result['request'], self.result['headers'] = {}, {}
             self.result['request']['method'], self.result['request']['url'], self.result['request']['version'] = start_line
             for line in headers:
@@ -359,7 +553,7 @@ class HTTPData(ApplicationData):
                 self.result['headers'][line[0]] = line[1]
             self.result['body'] = body
             self.protocol = self.result['request']['version']
-        elif start_line[0] in ['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0']:    # 응답일때
+        elif start_line[0] in ['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0']:
             self.result['response'], self.result['headers'] = {}, {}
             self.result['response']['protocol'], self.result['response']['state_code'], self.result['response']['state_line'] = start_line
             for line in headers:
@@ -476,6 +670,8 @@ class Packet():
                 return None
             elif (self.transport_header.src_port in [80,8080] or self.transport_header.dst_port in [80,8080]):
                 return HTTPData(data)
+            elif (self.transport_header.src_port in [53] or self.transport_header.dst_port in [53]):
+                return DNSData(data)
         return None
 
 
