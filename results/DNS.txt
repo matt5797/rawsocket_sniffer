@@ -1,3 +1,5 @@
+root@goorm:/workspace/rawsocket_sniffer(main)# python sniffer.py -dp 53 > DNS.txt
+
 goorm
 start sniffing 172.17.0.17
 options:  Namespace(destport=[53], display_layer=None, except_proto=None, necessary_proto=None, sorceport=None)

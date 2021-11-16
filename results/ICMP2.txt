@@ -1,3 +1,5 @@
+root@goorm:/workspace/rawsocket_sniffer(main)# traceroute 8.8.8.8 > ICMP2.txt
+
 traceroute to computer.kpu.ac.kr (210.93.57.50), 30 hops max, 60 byte packets
  1  ip-172-17-0-1.ap-northeast-2.compute.internal (172.17.0.1)  0.100 ms  0.033 ms  0.051 ms
  2  * * *

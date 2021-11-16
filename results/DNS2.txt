@@ -1,3 +1,5 @@
+root@goorm:/workspace/rawsocket_sniffer(main)# nslookup ns.kpu.ac.kr > DNS2.txt
+
 Server:		10.1.0.2
 Address:	10.1.0.2#53
 

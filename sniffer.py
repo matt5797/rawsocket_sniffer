@@ -125,6 +125,7 @@ class IPv4Header(NetworkHeader):
                               50: "ESP",
                               51: "AH",
                               57: "SKIP",
+                              66: "RVD",
                               88: "EIGRP",
                               89: "OSPF",
                               115: "L2TP"}
@@ -416,9 +417,7 @@ class Packet():
             return False
         if opts[1] and len(set(types).intersection(set(opts[1])))>0:
             return False
-        if opts[2] and self.transport_header and self.transport_header.src_port not in opts[2]:
-            return False
-        if opts[3] and self.transport_header and self.transport_header.dst_port not in opts[3]:
+        if opts[2] and self.transport_header and (self.transport_header.src_port not in opts[2] and self.transport_header.dst_port not in opts[3]):
             return False
         else:
             return True
@@ -502,11 +501,12 @@ class Sniffer():
         print(self.hostname)
         print('start sniffing {0}'.format(self.host))
         print('options: ', args)
-        self.sniffing(1000, (args.necessary_proto, args.except_proto, args.sorceport, args.destport, args.display_layer))
+        self.sniffing(1000, (args.necessary_proto, args.except_proto, args.sorceport, args.destport, args.display_layer), args.summary)
 
 
 def argparser():
     parser = ArgumentParser()
+    parser.add_argument('-s', '--summary', action='store_true', help='summary mode')
     parser.add_argument('-sp', '--sorceport', action='append', type=int, help='sorce port')
     parser.add_argument('-dp', '--destport', action='append', type=int, help='destination port')
 

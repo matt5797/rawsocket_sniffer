@@ -1,3 +1,5 @@
+root@goorm:/workspace/rawsocket_sniffer(main)# python sniffer.py -np ICMP > ICMP.txt
+
 goorm
 start sniffing 172.17.0.17
 options:  Namespace(destport=None, display_layer=None, except_proto=None, necessary_proto=['ICMP'], sorceport=None)
