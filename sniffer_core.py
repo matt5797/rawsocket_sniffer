@@ -89,7 +89,7 @@ class EthernetHeader(DataLinkHeader):
         return {'type': self.type, 'dest_mac': self.dest_mac, 'src_mac': self.src_mac, 'eth_type': self.eth_type_str}
 
     def get_info(self):
-        return ""
+        return "{} -> {} ({})".format(self.src_mac, self.dest_mac, self.eth_type_str)
 
     def get_mac_addr(self, src):
         byte_str = ["{:02x}".format(src[i]) for i in range(0, len(src))]
@@ -164,7 +164,7 @@ class IPv4Header(NetworkHeader):
                 'ttl': self.ttl, 'proto': self.proto_str, 'check_sum': self.check_sum, 'src_ip': self.src_ip, 'dst_ip': self.dst_ip}
 
     def get_info(self):
-        return ""
+        return "{} / {} -> {} ({})".format(self.ver_str, self.src_ip, self.dst_ip, self.proto_str)
 
     def get_ip_version(self, src):
         IPVersions = {4:"IPv4", 6: "IPv6"}
@@ -252,7 +252,7 @@ class ICMPHeader(TransportHeader):
                 'message': self.message, 'message2': self.message2, 'hdr_size': self.hdr_size}
 
     def get_info(self):
-        return ""
+        return "{} ({})".format(self.icmp_type, self.icmp_code)
 
     def get_icmp_type(self):
         ICMPType = {0: "Echo Reply", 
@@ -345,7 +345,7 @@ class UDPHeader(TransportHeader):
                 'check_sum': self.check_sum, 'hdr_size': self.hdr_size}
 
     def get_info(self):
-        return ""
+        return "{} -> {} Len={}".format(self.src_port, self.dst_port, self.length)
 
 
 class TCPHeader(TransportHeader):
@@ -567,7 +567,7 @@ class DNSMessage(DNS):
         return values
 
     def get_info(self):
-        return ""
+        return " {} {}".format(self.type_str, self.name)
 
 
 class DNSData(ApplicationData, DNS):
@@ -622,7 +622,10 @@ class DNSData(ApplicationData, DNS):
                 'query_type': self.query_type, 'query_class': self.query_class, 'answers': answer_json_list}
 
     def get_info(self):
-        return ""
+        res = "0x{0:04x}".format(self.identifier)
+        for answer in self.answer_list:
+            res = res + answer.get_info()
+        return res
     
     def parseHeaderFlagField(self, flags):
         QR = str(flags >> 15)
@@ -696,7 +699,10 @@ class HTTPData(ApplicationData):
         return self.result
 
     def get_info(self):
-        return ""
+        if 'request' in self.result.keys():
+            return "{} {} {}".format(self.result['request']['method'], self.result['request']['url'], self.result['request']['version'])
+        elif 'response' in self.result.keys():
+            return "{} {} {}".format(self.result['response']['protocol'], self.result['response']['state_code'], self.result['response']['state_line'])
 
 
 class Packet():

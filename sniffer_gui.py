@@ -5,6 +5,7 @@ from PyQt5.QtCore import *
 from sniffer_core import *
 import time
 from argparse import ArgumentParser
+import json
 
 
 def argparser():
@@ -22,6 +23,37 @@ def argparser():
     parser.add_argument('-dl', '--display_layer', action='append', type=str, help='display layer: [datalink, network, transport, application]')
 
     return parser.parse_args()
+
+
+def get_hex_dump(buffer, start_offset=0):
+    offset = 0
+    res = ""
+    while offset < len(buffer):
+        # Offset
+        row1 = ' %04X : ' % (offset + start_offset)
+        if ((len(buffer) - offset) < 0x10) is True:
+            data = buffer[offset:]
+        else:
+            data = buffer[offset:offset + 0x10]
+ 
+        # Hex Dump
+        row2 = ""
+        for hex_dump in data:
+            row2 = row2 + "%02X" % hex_dump + ' '
+        if ((len(buffer) - offset) < 0x10) is True:
+            row2 = row2 + ' ' * (3 * (0x10 - len(data)))
+ 
+        # Ascii
+        row3 = ""
+        for ascii_dump in data:
+            if ((ascii_dump >= 0x20) is True) and ((ascii_dump <= 0x7E) is True):
+                row3 = row3 + chr(ascii_dump)
+            else:
+                row3 = row3 + '.'
+        offset = offset + len(data)
+
+        res = res + "{:<10} {:<70} {}\n".format(row1, row2, row3)
+    return res
 
 
 class Sniffer(QThread):
@@ -58,7 +90,7 @@ class MainWindow(QMainWindow):
         self.sniffer = Sniffer(self.packet_list, self.args)
 
     def initUI(self):
-        self.setWindowTitle('My First Application')
+        self.setWindowTitle('Sniffing program')
 
         #actions
         startAction = QAction(QIcon('res/start.png'), 'Start', self)
@@ -74,6 +106,7 @@ class MainWindow(QMainWindow):
         saveAction = QAction(QIcon('res/save.png'), 'Save', self)
         saveAction.setShortcut('Ctrl+S')
         saveAction.setStatusTip('save log')
+        saveAction.triggered.connect(self.packet_save)
 
         stopAction = QAction(QIcon('res/stop.png'), 'Stop', self)
         stopAction.setShortcut('Ctrl+P')
@@ -107,9 +140,11 @@ class MainWindow(QMainWindow):
 
         self.packet_list = PacketList(self)
         self.packet_browser = PacketBrowser(self)
+        self.packet_bytes = PacketBytes(self)
         layout.addWidget(self.filter_line)
         layout.addWidget(self.packet_list)
         layout.addWidget(self.packet_browser)
+        layout.addWidget(self.packet_bytes)
 
         widget = QWidget()
         widget.setLayout(layout)
@@ -128,6 +163,11 @@ class MainWindow(QMainWindow):
     def sniffing_stop(self):
         if self.sniffer.running:
             self.sniffer.pause()
+
+    def packet_save(self):
+        pass
+        #with open("logs/log.json", "w") as json_file:
+        #    json.dump(self.packet_list.packet_list, json_file)
 
 
 class PacketList(QWidget):
@@ -157,6 +197,7 @@ class PacketList(QWidget):
     @pyqtSlot(int, int)
     def cell_clicked(self, row, col):
         self.main_window.packet_browser.print_packet(self.packet_list[row])
+        self.main_window.packet_bytes.print_packet(self.packet_list[row])
     
     def add_packet(self, data):
         self.packet_list.append(data)
@@ -182,13 +223,10 @@ class PacketBrowser(QWidget):
     def initUI(self):
         self.browser = QTextBrowser()
         self.browser.setAcceptRichText(True)
-        self.browser.setOpenExternalLinks(True)
 
         vbox = QVBoxLayout()
         vbox.addWidget(self.browser, 1)
         self.setLayout(vbox)
-
-        self.show()
     
     def print_packet(self, packet):
         packet_json = packet['packet'].get_json()
@@ -196,18 +234,26 @@ class PacketBrowser(QWidget):
         #res = "<html><details> {} {} </details></html>".format("<summary>more details</summary>", "<p>here is detail texts</p>")
         self.browser.clear()
         if 'datalink_header' in packet_json.keys():
+            res = "<b> {} / {} </b>".format(packet_json['datalink_header']['type'], packet['packet'].datalink_header.get_info())
+            self.browser.append(res)
             res = self.print_json(packet_json['datalink_header'])
             self.browser.append(res)
         if 'network_header' in packet_json.keys():
             self.browser.append("{:=^78}".format(""))
+            res = "<b> {} / {} </b>".format(packet_json['network_header']['type'], packet['packet'].network_header.get_info())
+            self.browser.append(res)
             res = self.print_json(packet_json['network_header'])
             self.browser.append(res)
         if 'transport_header' in packet_json.keys():
             self.browser.append("{:=^78}".format(""))
+            res = "<b> {} / {} </b>".format(packet_json['transport_header']['type'], packet['packet'].transport_header.get_info())
+            self.browser.append(res)
             res = self.print_json(packet_json['transport_header'])
             self.browser.append(res)
         if 'application_data' in packet_json.keys():
             self.browser.append("{:=^78}".format(""))
+            res = "<b> {} / {} </b>".format(packet_json['application_data']['type'], packet['packet'].application_data.get_info())
+            self.browser.append(res)
             res = self.print_json(packet_json['application_data'])
             self.browser.append(res)
 
@@ -216,6 +262,27 @@ class PacketBrowser(QWidget):
         for i in ori:
             res = res + "{}: {}\n".format(str(i), str(ori[i]))
         return res
+
+
+class PacketBytes(QWidget):
+    def __init__(self, main_window):
+        super().__init__()
+        self.initUI()
+        self.main_window = main_window
+
+    def initUI(self):
+        self.browser = QTextBrowser()
+        self.browser.setAcceptRichText(True)
+
+        vbox = QVBoxLayout()
+        vbox.addWidget(self.browser, 1)
+        self.setLayout(vbox)
+    
+    def print_packet(self, packet):
+        raw_data = packet['packet'].get_json()['raw_data']
+        self.browser.clear()
+        res = get_hex_dump(raw_data)
+        self.browser.append(res)
 
 
 if __name__ == '__main__':
