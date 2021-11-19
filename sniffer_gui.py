@@ -36,7 +36,7 @@ class Sniffer(QThread):
         self.time_start = time.time()
 
     def run(self):
-        while self.running and self.packet_num<self.cnt:
+        while self.running:# and self.packet_num<self.cnt:
             raw_data, addr = self.sniffer.recvfrom(65565)
             packet = Packet(raw_data)
             if packet.is_filtered(self.opts):
@@ -119,10 +119,15 @@ class MainWindow(QMainWindow):
         self.show()
 
     def sniffing_start(self):
-        self.sniffer.start()
+        if self.sniffer.running:
+            self.sniffer.start()
+        elif not self.sniffer.running:
+            self.sniffer.resume()
+            self.sniffer.start()
 
     def sniffing_stop(self):
-        self.sniffer.pause()
+        if self.sniffer.running:
+            self.sniffer.pause()
 
 
 class PacketList(QWidget):
@@ -133,8 +138,6 @@ class PacketList(QWidget):
         self.main_window = main_window
 
     def initUI(self):
-        #self.tableWidget = QTableWidget()
-        #self.tableWidget.setColumnCount(7)
         self.tableWidget = QTableWidget(0, 7,
             selectionBehavior=QAbstractItemView.SelectRows,
             selectionMode=QAbstractItemView.SingleSelection,
@@ -143,6 +146,7 @@ class PacketList(QWidget):
 
         self.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.tableWidget.verticalHeader().hide()
 
         self.tableWidget.cellClicked.connect(self.cell_clicked)
 
@@ -167,16 +171,7 @@ class PacketList(QWidget):
         self.tableWidget.setItem(row, 4, QTableWidgetItem(str(packet_json['protocol'])))
         self.tableWidget.setItem(row, 5, QTableWidgetItem(str(packet_json['length'])))
         self.tableWidget.setItem(row, 6, QTableWidgetItem(packet.get_info()))
-        '''
-        if 'datalink_header' in packet_json.keys():
-            self.tableWidget.setItem(row, 2, QTableWidgetItem(str(packet_json['datalink_header'])))
-        if 'network_header' in packet_json.keys():
-            self.tableWidget.setItem(row, 3, QTableWidgetItem(str(packet_json['network_header'])))
-        if 'transport_header' in packet_json.keys():
-            self.tableWidget.setItem(row, 4, QTableWidgetItem(str(packet_json['transport_header'])))
-        if 'application_data' in packet_json.keys():
-            self.tableWidget.setItem(row, 5, QTableWidgetItem(str(packet_json['application_data'])))
-        '''
+
 
 class PacketBrowser(QWidget):
     def __init__(self, main_window):
@@ -197,7 +192,31 @@ class PacketBrowser(QWidget):
     
     def print_packet(self, packet):
         packet_json = packet['packet'].get_json()
-        self.browser.append(str(packet_json))
+
+        #res = "<html><details> {} {} </details></html>".format("<summary>more details</summary>", "<p>here is detail texts</p>")
+        self.browser.clear()
+        if 'datalink_header' in packet_json.keys():
+            res = self.print_json(packet_json['datalink_header'])
+            self.browser.append(res)
+        if 'network_header' in packet_json.keys():
+            self.browser.append("{:=^78}".format(""))
+            res = self.print_json(packet_json['network_header'])
+            self.browser.append(res)
+        if 'transport_header' in packet_json.keys():
+            self.browser.append("{:=^78}".format(""))
+            res = self.print_json(packet_json['transport_header'])
+            self.browser.append(res)
+        if 'application_data' in packet_json.keys():
+            self.browser.append("{:=^78}".format(""))
+            res = self.print_json(packet_json['application_data'])
+            self.browser.append(res)
+
+    def print_json(self, ori):
+        res = ""
+        for i in ori:
+            res = res + "{}: {}\n".format(str(i), str(ori[i]))
+        return res
+
 
 if __name__ == '__main__':
    app = QApplication(sys.argv)
