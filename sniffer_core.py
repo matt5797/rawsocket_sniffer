@@ -1,7 +1,6 @@
 from socket import *
 from struct import unpack
 import binascii
-from argparse import ArgumentParser
 from io import BytesIO
 
 
@@ -65,6 +64,9 @@ class DataLinkHeader():
     def get_json(self):
         return {}
 
+    def get_info(self):
+        return ""
+
 
 class EthernetHeader(DataLinkHeader):
     def __init__(self, data):
@@ -85,6 +87,9 @@ class EthernetHeader(DataLinkHeader):
 
     def get_json(self):
         return {'type': self.type, 'dest_mac': self.dest_mac, 'src_mac': self.src_mac, 'eth_type': self.eth_type_str}
+
+    def get_info(self):
+        return ""
 
     def get_mac_addr(self, src):
         byte_str = ["{:02x}".format(src[i]) for i in range(0, len(src))]
@@ -107,6 +112,9 @@ class NetworkHeader():
 
     def get_json(self):
         return {}
+
+    def get_info(self):
+        return ""
 
 
 class IPv4Header(NetworkHeader):
@@ -154,6 +162,9 @@ class IPv4Header(NetworkHeader):
         return {'type': self.type, 'ver': self.ver_str, 'hdr_size': self.hdr_size, 'dscp': self.dscp,
                 'ecn': self.ecn, 'tlen': self.tlen, 'id': self.id, 'flags': self.flags, 'fragoff': self.fragoff,
                 'ttl': self.ttl, 'proto': self.proto_str, 'check_sum': self.check_sum, 'src_ip': self.src_ip, 'dst_ip': self.dst_ip}
+
+    def get_info(self):
+        return ""
 
     def get_ip_version(self, src):
         IPVersions = {4:"IPv4", 6: "IPv6"}
@@ -204,6 +215,9 @@ class TransportHeader():
     def get_json(self):
         return {}
 
+    def get_info(self):
+        return ""
+
 
 class ICMPHeader(TransportHeader):
     def __init__(self, data):
@@ -236,6 +250,9 @@ class ICMPHeader(TransportHeader):
     def get_json(self):
         return {'type': self.type, 'icmp_type': self.icmp_type, 'icmp_code': self.icmp_code, 'check_sum': self.check_sum,
                 'message': self.message, 'message2': self.message2, 'hdr_size': self.hdr_size}
+
+    def get_info(self):
+        return ""
 
     def get_icmp_type(self):
         ICMPType = {0: "Echo Reply", 
@@ -327,6 +344,9 @@ class UDPHeader(TransportHeader):
         return {'type': self.type, 'src_port': self.src_port, 'dst_port': self.dst_port, 'length': self.length,
                 'check_sum': self.check_sum, 'hdr_size': self.hdr_size}
 
+    def get_info(self):
+        return ""
+
 
 class TCPHeader(TransportHeader):
     def __init__(self, data):
@@ -363,6 +383,9 @@ class TCPHeader(TransportHeader):
         return {'type': self.type, 'src_port': self.src_port, 'dst_port': self.dst_port, 'seq_num': self.seq_num,
                 'ack_num': self.ack_num, 'hdr_size': self.hdr_size, 'flags': self.flags, 'win_size': self.win_size,
                 'check_sum': self.check_sum, 'urg_ptr': self.urg_ptr}
+
+    def get_info(self):
+        return "{} -> {} [{}] Seq={} Ack={} Win={} Len={}".format(self.src_port, self.dst_port, self.flags, self.seq_num, self.ack_num, self.win_size, len(self.data))
 
     def get_tcp_flag(self, flag_bits):
         result = []
@@ -403,6 +426,9 @@ class ApplicationData():
 
     def get_json(self):
         return {}
+
+    def get_info(self):
+        return ""
 
 
 class DNS():
@@ -540,6 +566,9 @@ class DNSMessage(DNS):
         
         return values
 
+    def get_info(self):
+        return ""
+
 
 class DNSData(ApplicationData, DNS):
     def __init__(self, payload):
@@ -591,6 +620,9 @@ class DNSData(ApplicationData, DNS):
                 'OPCODE': self.OPCODE, 'AA': self.AA, 'TC': self.TC, 'RD': self.RD,
                 'RA': self.RA, 'Z': self.Z, 'RCODE': self.RCODE, 'query_name': self.query_name,
                 'query_type': self.query_type, 'query_class': self.query_class, 'answers': answer_json_list}
+
+    def get_info(self):
+        return ""
     
     def parseHeaderFlagField(self, flags):
         QR = str(flags >> 15)
@@ -614,7 +646,7 @@ class HTTPData(ApplicationData):
         headers = headers.split('\r\n')
         start_line = headers.pop(0).split(' ')
 
-        self.result = {}
+        self.result = {'type': self.type}
         if start_line[0] in ['POST', 'GET', 'HEAD', 'PUT', 'DELETE']:
             self.result['request'], self.result['headers'] = {}, {}
             self.result['request']['method'], self.result['request']['url'], self.result['request']['version'] = start_line
@@ -663,6 +695,9 @@ class HTTPData(ApplicationData):
     def get_json(self):
         return self.result
 
+    def get_info(self):
+        return ""
+
 
 class Packet():
     def __init__(self, raw_data):
@@ -705,23 +740,36 @@ class Packet():
         print('\n')
 
     def get_json(self):
-        res = {}
+        res = {"raw_data": self.raw_data, "length": len(self.raw_data), "protocol": "None"}
         if self.datalink_header:
             res['datalink_header'] = self.datalink_header.get_json()
+            res['protocol'] = res['datalink_header']['type']
         if self.network_header:
             res['network_header'] = self.network_header.get_json()
+            res['protocol'] = res['network_header']['type']
         if self.transport_header:
             res['transport_header'] = self.transport_header.get_json()
+            res['protocol'] = res['transport_header']['type']
         if self.application_data:
             res['application_data'] = self.application_data.get_json()
+            res['protocol'] = res['application_data']['type']
+        return res
+
+    def get_info(self):
+        res = ""
+        if self.datalink_header:
+            res = self.datalink_header.get_info()
+        if self.network_header:
+            res = self.network_header.get_info()
+        if self.transport_header:
+            res = self.transport_header.get_info()
+        if self.application_data:
+            res = self.application_data.get_info()
         return res
 
     def dump_summary(self, num=0):
         if self.network_header and self.transport_header:
             print("PACKET #{} / {}:{} -> {}:{} / ({})".format(num, self.network_header.src_ip, self.transport_header.src_port,  self.network_header.dst_ip, self.transport_header.dst_port, self.network_header.proto_str))
-    
-    def get_info(self):
-        return "PACKET #{} / {}:{} -> {}:{} / ({})".format(num, self.network_header.src_ip, self.transport_header.src_port,  self.network_header.dst_ip, self.transport_header.dst_port, self.network_header.proto_str)
 
     def get_datalink_header(self, data):
         if True:
@@ -761,56 +809,4 @@ class Packet():
             elif (self.transport_header.src_port in [53] or self.transport_header.dst_port in [53]):
                 return DNSData(data)
         return None
-
-
-class Sniffer():
-    def __init__(self):
-        self.hostname = gethostname()
-        self.host = gethostbyname(self.hostname)
-        self.sniffer = socket(AF_PACKET, SOCK_RAW, ntohs(0x0003))
-        self.packets = []
-
-    def sniffing(self, opts, cnt, summary=False, silence=False):
-        i = 0
-        while i<cnt:
-            raw_data, addr = self.sniffer.recvfrom(65565)
-            packet = Packet(raw_data)
-            if packet.is_filtered(opts):
-                self.packets.append(packet)
-                if not summary and not silence:
-                    if opts[-1]:
-                        packet.dump(i, opts[-1])
-                    else:
-                        packet.dump(i)
-                elif summary and not silence:
-                    packet.dump_summary(i)
-                i = i + 1
-
-    def main(self, args):
-        print(self.hostname)
-        print('start sniffing {0}'.format(self.host))
-        print('options: ', args)
-        self.sniffing((args.necessary_proto, args.except_proto, args.sorceport, args.destport, args.display_layer), args.number, args.summary, args.silence)
-
-
-def argparser():
-    parser = ArgumentParser()
-    parser.add_argument('-s', '--summary', action='store_true', help='summary mode')
-    parser.add_argument('-sl', '--silence', action='store_true', help='silence mode')
-
-    parser.add_argument('-n', '--number', type=int, help='packet number', default=1000)
-    parser.add_argument('-sp', '--sorceport', action='append', type=int, help='sorce port')
-    parser.add_argument('-dp', '--destport', action='append', type=int, help='destination port')
-
-    parser.add_argument('-np', '--necessary_proto', action='append', type=str, help='necessary protocol: [Ethernet, IP, ICMP, TCP, UDP]')
-    parser.add_argument('-ep', '--except_proto', action='append', type=str, help='except protocol: [Ethernet, IP, ICMP, TCP, UDP]')
-
-    parser.add_argument('-dl', '--display_layer', action='append', type=str, help='display layer: [datalink, network, transport, application]')
-
-    return parser.parse_args()
-
-
-if __name__ == "__main__":
-    args = argparser()
-    Sniffer().main(args)
 
