@@ -6,6 +6,7 @@ from sniffer_core import *
 import time
 from argparse import ArgumentParser
 import json
+import re
 
 
 def argparser():
@@ -66,13 +67,20 @@ class Sniffer(QThread):
         self.sniffer = socket(AF_PACKET, SOCK_RAW, ntohs(0x0003))
         self.packet_num = 0
         self.time_start = time.time()
+        self.filter = {
+            "eth": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
+            "ip": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
+            "tcp": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
+            "protocol": [],
+        }
 
     def run(self):
         while self.running:# and self.packet_num<self.cnt:
             raw_data, addr = self.sniffer.recvfrom(65565)
             packet = Packet(raw_data)
-            if packet.is_filtered(self.opts):
-                self.table.add_packet({"no": self.packet_num, "time": time.time(), "time_since": (time.time() - self.time_start), "packet": packet})
+            #if packet.is_filtered(self.opts):
+            if self.is_filtered(packet.get_json()):
+                self.table.add_packet({"no": self.packet_num, "time": time.time(), "time_since": (time.time() - self.time_start), "packet": packet.get_json()})
                 self.packet_num = self.packet_num + 1
 
     def resume(self):
@@ -80,6 +88,129 @@ class Sniffer(QThread):
 
     def pause(self):
         self.running = False
+    
+    def filter_change(self, filter_str):
+        self.pause()
+        self.table.clear()
+        self.packet_num = 0
+        self.filter = {
+            "eth": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
+            "ip": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
+            "tcp": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
+            "protocol": [],
+        }
+        
+        regex = """(?P<pre>and|or)*\s*(((?P<protocol>ip|eth|tcp).(?P<pro_tar>\w+))\s*(?P<opr>==|!=)\s*(?P<target>(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}|(?:[a-zA-Z0-9]{2}[:-]){5}[a-zA-Z0-9]{2}|\d+))"""
+
+        match_list = re.finditer(regex, filter_str)
+
+        res_list = {}
+        for index, match in enumerate(match_list):
+            res = match.groupdict()
+            res_list[index] = res
+            print(match)
+
+            if res['protocol']=='eth':
+                if res['pro_tar'] == 'addr':
+                    if res['opr'] == '==':
+                        self.filter['eth']['all']['necessary'].append(res['target'])
+                    elif res['opr'] == '!=':
+                        self.filter['eth']['all']['except'].append(res['target'])
+                elif res['pro_tar'] == 'src':
+                    if res['opr'] == '==':
+                        self.filter['eth']['src']['necessary'].append(res['target'])
+                    elif res['opr'] == '!=':
+                        self.filter['eth']['src']['except'].append(res['target'])
+                elif res['pro_tar'] == 'dst':
+                    if res['opr'] == '==':
+                        self.filter['eth']['dst']['necessary'].append(res['target'])
+                    elif res['opr'] == '!=':
+                        self.filter['eth']['dst']['except'].append(res['target'])
+                self.filter['protocol'].append('eth')
+            elif res['protocol']=='ip':
+                if res['pro_tar'] == 'addr':
+                    if res['opr'] == '==':
+                        self.filter['ip']['all']['necessary'].append(res['target'])
+                    elif res['opr'] == '!=':
+                        self.filter['ip']['all']['except'].append(res['target'])
+                elif res['pro_tar'] == 'src':
+                    if res['opr'] == '==':
+                        self.filter['ip']['src']['necessary'].append(res['target'])
+                    elif res['opr'] == '!=':
+                        self.filter['ip']['src']['except'].append(res['target'])
+                elif res['pro_tar'] == 'dst':
+                    if res['opr'] == '==':
+                        self.filter['ip']['dst']['necessary'].append(res['target'])
+                    elif res['opr'] == '!=':
+                        self.filter['ip']['dst']['except'].append(res['target'])
+                self.filter['protocol'].append('ip')
+            elif res['protocol']=='tcp':
+                if res['pro_tar'] == 'port':
+                    if res['opr'] == '==':
+                        self.filter['tcp']['all']['necessary'].append(res['target'])
+                    elif res['opr'] == '!=':
+                        self.filter['tcp']['all']['except'].append(res['target'])
+                elif res['pro_tar'] == 'srcport':
+                    if res['opr'] == '==':
+                        self.filter['tcp']['src']['necessary'].append(res['target'])
+                    elif res['opr'] == '!=':
+                        self.filter['tcp']['src']['except'].append(res['target'])
+                elif res['pro_tar'] == 'dstport':
+                    if res['opr'] == '==':
+                        self.filter['tcp']['dst']['necessary'].append(res['target'])
+                    elif res['opr'] == '!=':
+                        self.filter['tcp']['dst']['except'].append(res['target'])
+                self.filter['protocol'].append('tcp')
+        print(self.filter)
+        self.resume()
+
+    def is_filtered(self, packet):
+        if 'datalink_header' in packet.keys() and packet['datalink_header']['type'] == 'Ethernet':
+            if packet['datalink_header']['src_mac'] in self.filter['eth']['src']['except']:
+                return False
+            if (len(self.filter['eth']['src']['necessary'])>0) and packet['datalink_header']['src_mac'] not in self.filter['eth']['src']['necessary']:
+                return False
+            if packet['datalink_header']['dst_mac'] in self.filter['eth']['dst']['except']:
+                return False
+            if (len(self.filter['eth']['dst']['necessary'])>0) and packet['datalink_header']['dst_mac'] not in self.filter['eth']['dst']['necessary']:
+                return False
+            if (packet['datalink_header']['src_mac'] in self.filter['eth']['all']['except']) or (packet['datalink_header']['dst_mac'] in self.filter['eth']['all']['except']):
+                return False
+            if (len(self.filter['eth']['all']['necessary'])>0) and ((packet['datalink_header']['src_mac'] not in self.filter['eth']['all']['necessary']) or (packet['datalink_header']['dst_mac'] not in self.filter['eth']['all']['necessary'])):
+                return False
+        elif 'eth' in self.filter['protocol']:
+            return False
+        if 'network_header' in packet.keys() and packet['network_header']['type'] == 'IPv4':
+            if packet['network_header']['src_ip'] in self.filter['ip']['src']['except']:
+                return False
+            if (len(self.filter['ip']['src']['necessary'])>0) and packet['network_header']['src_ip'] not in self.filter['ip']['src']['necessary']:
+                return False
+            if packet['network_header']['dst_ip'] in self.filter['ip']['dst']['except']:
+                return False
+            if (len(self.filter['ip']['dst']['necessary'])>0) and packet['network_header']['dst_ip'] not in self.filter['ip']['dst']['necessary']:
+                return False
+            if (packet['network_header']['src_ip'] in self.filter['ip']['all']['except']) or (packet['network_header']['dst_ip'] in self.filter['ip']['all']['except']):
+                return False
+            if (len(self.filter['ip']['all']['necessary'])>0) and ((packet['network_header']['src_ip'] not in self.filter['ip']['all']['necessary']) or (packet['network_header']['dst_ip'] not in self.filter['ip']['all']['necessary'])):
+                return False
+        elif 'ip' in self.filter['protocol']:
+            return False
+        if 'transport_header' in packet.keys() and packet['transport_header']['type'] == 'TCP':
+            if packet['transport_header']['src_port'] in self.filter['tcp']['src']['except']:
+                return False
+            if (len(self.filter['tcp']['src']['necessary'])>0) and packet['transport_header']['src_port'] not in self.filter['tcp']['src']['necessary']:
+                return False
+            if packet['transport_header']['dst_port'] in self.filter['tcp']['dst']['except']:
+                return False
+            if (len(self.filter['tcp']['dst']['necessary'])>0) and packet['transport_header']['dst_port'] not in self.filter['tcp']['dst']['necessary']:
+                return False
+            if (packet['transport_header']['src_port'] in self.filter['tcp']['all']['except']) or (packet['transport_header']['dst_port'] in self.filter['tcp']['all']['except']):
+                return False
+            if (len(self.filter['tcp']['all']['necessary'])>0) and ((packet['transport_header']['src_port'] not in self.filter['tcp']['all']['necessary']) or (packet['transport_header']['dst_port'] not in self.filter['tcp']['all']['necessary'])):
+                return False
+        elif 'tcp' in self.filter['protocol']:
+            return False
+        return True
 
 
 class MainWindow(QMainWindow):
@@ -134,14 +265,24 @@ class MainWindow(QMainWindow):
         self.toolbar.addAction(exitAction)
 
         #filter line
-        self.filter_line = QLineEdit()
+        self.filter_str = QLineEdit()
+        self.filter_btn = QPushButton(self)
+        self.filter_btn.setText('apply')
+        self.filter_btn.clicked.connect(self.filter_btn_clicked)
 
-        layout = QVBoxLayout()
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(self.filter_str)
+        filter_layout.addWidget(self.filter_btn)
+
+        filter_widget = QWidget()
+        filter_widget.setLayout(filter_layout)
 
         self.packet_list = PacketList(self)
         self.packet_browser = PacketBrowser(self)
         self.packet_bytes = PacketBytes(self)
-        layout.addWidget(self.filter_line)
+
+        layout = QVBoxLayout()
+        layout.addWidget(filter_widget)
         layout.addWidget(self.packet_list)
         layout.addWidget(self.packet_browser)
         layout.addWidget(self.packet_bytes)
@@ -168,6 +309,9 @@ class MainWindow(QMainWindow):
         pass
         #with open("logs/log.json", "w") as json_file:
         #    json.dump(self.packet_list.packet_list, json_file)
+    
+    def filter_btn_clicked(self):
+        self.sniffer.filter_change(self.filter_str.text())
 
 
 class PacketList(QWidget):
@@ -201,8 +345,7 @@ class PacketList(QWidget):
     
     def add_packet(self, data):
         self.packet_list.append(data)
-        packet = data['packet']
-        packet_json = packet.get_json()
+        packet_json = data['packet']
         row = self.tableWidget.rowCount()
         self.tableWidget.insertRow(row)
         self.tableWidget.setItem(row, 0, QTableWidgetItem(str(data['no'])))
@@ -211,7 +354,11 @@ class PacketList(QWidget):
         self.tableWidget.setItem(row, 3, QTableWidgetItem(str(packet_json['network_header']['dst_ip'])))
         self.tableWidget.setItem(row, 4, QTableWidgetItem(str(packet_json['protocol'])))
         self.tableWidget.setItem(row, 5, QTableWidgetItem(str(packet_json['length'])))
-        self.tableWidget.setItem(row, 6, QTableWidgetItem(packet.get_info()))
+        self.tableWidget.setItem(row, 6, QTableWidgetItem(packet_json['info']))
+    
+    def clear(self):
+        self.packet_list = []
+        self.tableWidget.setRowCount(0)
 
 
 class PacketBrowser(QWidget):
@@ -229,30 +376,30 @@ class PacketBrowser(QWidget):
         self.setLayout(vbox)
     
     def print_packet(self, packet):
-        packet_json = packet['packet'].get_json()
+        packet_json = packet['packet']
 
         #res = "<html><details> {} {} </details></html>".format("<summary>more details</summary>", "<p>here is detail texts</p>")
         self.browser.clear()
         if 'datalink_header' in packet_json.keys():
-            res = "<b> {} / {} </b>".format(packet_json['datalink_header']['type'], packet['packet'].datalink_header.get_info())
+            res = "<b> {} / {} </b>".format(packet_json['datalink_header']['type'], packet_json['datalink_header']['info'])
             self.browser.append(res)
             res = self.print_json(packet_json['datalink_header'])
             self.browser.append(res)
         if 'network_header' in packet_json.keys():
             self.browser.append("{:=^78}".format(""))
-            res = "<b> {} / {} </b>".format(packet_json['network_header']['type'], packet['packet'].network_header.get_info())
+            res = "<b> {} / {} </b>".format(packet_json['network_header']['type'], packet_json['network_header']['info'])
             self.browser.append(res)
             res = self.print_json(packet_json['network_header'])
             self.browser.append(res)
         if 'transport_header' in packet_json.keys():
             self.browser.append("{:=^78}".format(""))
-            res = "<b> {} / {} </b>".format(packet_json['transport_header']['type'], packet['packet'].transport_header.get_info())
+            res = "<b> {} / {} </b>".format(packet_json['transport_header']['type'], packet_json['transport_header']['info'])
             self.browser.append(res)
             res = self.print_json(packet_json['transport_header'])
             self.browser.append(res)
         if 'application_data' in packet_json.keys():
             self.browser.append("{:=^78}".format(""))
-            res = "<b> {} / {} </b>".format(packet_json['application_data']['type'], packet['packet'].application_data.get_info())
+            res = "<b> {} / {} </b>".format(packet_json['application_data']['type'], packet_json['application_data']['info'])
             self.browser.append(res)
             res = self.print_json(packet_json['application_data'])
             self.browser.append(res)
@@ -279,7 +426,7 @@ class PacketBytes(QWidget):
         self.setLayout(vbox)
     
     def print_packet(self, packet):
-        raw_data = packet['packet'].get_json()['raw_data']
+        raw_data = packet['packet']['raw_data']
         self.browser.clear()
         res = get_hex_dump(raw_data)
         self.browser.append(res)

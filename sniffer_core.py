@@ -62,7 +62,7 @@ class DataLinkHeader():
         print_section_footer(1)
 
     def get_json(self):
-        return {}
+        return {'type': 'Unknown', 'info': self.get_info()}
 
     def get_info(self):
         return ""
@@ -71,8 +71,8 @@ class DataLinkHeader():
 class EthernetHeader(DataLinkHeader):
     def __init__(self, data):
         self.type = "Ethernet"
-        dest, src, eth_type = unpack('! 6s 6s H', data[:14])
-        self.dest_mac = self.get_mac_addr(dest)
+        dst, src, eth_type = unpack('! 6s 6s H', data[:14])
+        self.dst_mac = self.get_mac_addr(dst)
         self.src_mac = self.get_mac_addr(src)
         self.eth_type = eth_type
         self.eth_type_str = self.get_eth_type(self.eth_type)
@@ -81,15 +81,15 @@ class EthernetHeader(DataLinkHeader):
     def dump(self):
         print_section_header("Ethernet HEADER", 1)
         print("Source MAC : {}".format(self.src_mac))
-        print("Destination MAC : {}".format(self.dest_mac))
+        print("Destination MAC : {}".format(self.dst_mac))
         print("Ethernet Type : {} ({})".format(hex(self.eth_type), self.eth_type_str))
         print_section_footer(1)
 
     def get_json(self):
-        return {'type': self.type, 'dest_mac': self.dest_mac, 'src_mac': self.src_mac, 'eth_type': self.eth_type_str}
+        return {'type': self.type, 'dst_mac': self.dst_mac, 'src_mac': self.src_mac, 'eth_type': self.eth_type_str, 'info': self.get_info()}
 
     def get_info(self):
-        return "{} -> {} ({})".format(self.src_mac, self.dest_mac, self.eth_type_str)
+        return "{} -> {} ({})".format(self.src_mac, self.dst_mac, self.eth_type_str)
 
     def get_mac_addr(self, src):
         byte_str = ["{:02x}".format(src[i]) for i in range(0, len(src))]
@@ -111,7 +111,7 @@ class NetworkHeader():
         print_section_footer(1)
 
     def get_json(self):
-        return {}
+        return {'type': 'Unknown', 'info': self.get_info()}
 
     def get_info(self):
         return ""
@@ -119,7 +119,7 @@ class NetworkHeader():
 
 class IPv4Header(NetworkHeader):
     def __init__(self, data):
-        self.type = "IP"
+        self.type = "IPv4"
         hdr_unpacked = unpack("!BBHHHBBH4s4s", data[:20])
 
         self.ver = hdr_unpacked[0] >> 4
@@ -161,7 +161,7 @@ class IPv4Header(NetworkHeader):
     def get_json(self):
         return {'type': self.type, 'ver': self.ver_str, 'hdr_size': self.hdr_size, 'dscp': self.dscp,
                 'ecn': self.ecn, 'tlen': self.tlen, 'id': self.id, 'flags': self.flags, 'fragoff': self.fragoff,
-                'ttl': self.ttl, 'proto': self.proto_str, 'check_sum': self.check_sum, 'src_ip': self.src_ip, 'dst_ip': self.dst_ip}
+                'ttl': self.ttl, 'proto': self.proto_str, 'check_sum': self.check_sum, 'src_ip': self.src_ip, 'dst_ip': self.dst_ip, 'info': self.get_info()}
 
     def get_info(self):
         return "{} / {} -> {} ({})".format(self.ver_str, self.src_ip, self.dst_ip, self.proto_str)
@@ -213,7 +213,7 @@ class TransportHeader():
         print_section_footer(1)
 
     def get_json(self):
-        return {}
+        return {'type': 'Unknown', 'info': self.get_info()}
 
     def get_info(self):
         return ""
@@ -249,7 +249,7 @@ class ICMPHeader(TransportHeader):
 
     def get_json(self):
         return {'type': self.type, 'icmp_type': self.icmp_type, 'icmp_code': self.icmp_code, 'check_sum': self.check_sum,
-                'message': self.message, 'message2': self.message2, 'hdr_size': self.hdr_size}
+                'message': self.message, 'message2': self.message2, 'hdr_size': self.hdr_size, 'info': self.get_info()}
 
     def get_info(self):
         return "{} ({})".format(self.icmp_type, self.icmp_code)
@@ -342,7 +342,7 @@ class UDPHeader(TransportHeader):
 
     def get_json(self):
         return {'type': self.type, 'src_port': self.src_port, 'dst_port': self.dst_port, 'length': self.length,
-                'check_sum': self.check_sum, 'hdr_size': self.hdr_size}
+                'check_sum': self.check_sum, 'hdr_size': self.hdr_size, 'info': self.get_info()}
 
     def get_info(self):
         return "{} -> {} Len={}".format(self.src_port, self.dst_port, self.length)
@@ -382,7 +382,7 @@ class TCPHeader(TransportHeader):
     def get_json(self):
         return {'type': self.type, 'src_port': self.src_port, 'dst_port': self.dst_port, 'seq_num': self.seq_num,
                 'ack_num': self.ack_num, 'hdr_size': self.hdr_size, 'flags': self.flags, 'win_size': self.win_size,
-                'check_sum': self.check_sum, 'urg_ptr': self.urg_ptr}
+                'check_sum': self.check_sum, 'urg_ptr': self.urg_ptr, 'info': self.get_info()}
 
     def get_info(self):
         return "{} -> {} [{}] Seq={} Ack={} Win={} Len={}".format(self.src_port, self.dst_port, self.flags, self.seq_num, self.ack_num, self.win_size, len(self.data))
@@ -425,7 +425,7 @@ class ApplicationData():
         print_section_footer(1)
 
     def get_json(self):
-        return {}
+        return {'type': 'Unknown', 'info': self.get_info()}
 
     def get_info(self):
         return ""
@@ -540,7 +540,7 @@ class DNSMessage(DNS):
             print('')
 
     def get_json(self):
-        values = {'name': self.name, 'type': self.type_str, 'qclass': self.qclass, 'ttl': self.ttl}
+        values = {'name': self.name, 'type': self.type_str, 'qclass': self.qclass, 'ttl': self.ttl, 'info': self.get_info()}
 
         if self.type_str == "A":
             values['rdata2'] = self.rdata2
@@ -619,7 +619,7 @@ class DNSData(ApplicationData, DNS):
                 'answer_num': self.answer_num, 'author_num': self.author_num, 'addition_num': self.addition_num, 'QR': self.QR,
                 'OPCODE': self.OPCODE, 'AA': self.AA, 'TC': self.TC, 'RD': self.RD,
                 'RA': self.RA, 'Z': self.Z, 'RCODE': self.RCODE, 'query_name': self.query_name,
-                'query_type': self.query_type, 'query_class': self.query_class, 'answers': answer_json_list}
+                'query_type': self.query_type, 'query_class': self.query_class, 'answers': answer_json_list, 'info': self.get_info()}
 
     def get_info(self):
         res = "0x{0:04x}".format(self.identifier)
@@ -696,6 +696,7 @@ class HTTPData(ApplicationData):
         print_section_footer(1)
 
     def get_json(self):
+        self.result['info'] = self.get_info()
         return self.result
 
     def get_info(self):
@@ -746,7 +747,7 @@ class Packet():
         print('\n')
 
     def get_json(self):
-        res = {"raw_data": self.raw_data, "length": len(self.raw_data), "protocol": "None"}
+        res = {"raw_data": self.raw_data, "length": len(self.raw_data), "protocol": "None", "info": self.get_info()}
         if self.datalink_header:
             res['datalink_header'] = self.datalink_header.get_json()
             res['protocol'] = res['datalink_header']['type']
