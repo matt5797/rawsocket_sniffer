@@ -2,6 +2,7 @@ from socket import *
 from struct import unpack
 import binascii
 from io import BytesIO
+import os
 
 
 def print_section_header(src, level=0):
@@ -55,7 +56,7 @@ def get_IPv6_addr(data):
 
 class DataLinkHeader():
     def __init__(self, data):
-        pass
+        self.data = data
 
     def dump(self):
         print_section_header("DataLink HEADER", 1)
@@ -710,7 +711,10 @@ class Packet():
     def __init__(self, raw_data):
         try:
             self.raw_data = raw_data
-            self.datalink_header, data = self.get_datalink_header(raw_data)
+            if os.name == 'nt':
+                self.datalink_header, data = None, self.raw_data
+            else:
+                self.datalink_header, data = self.get_datalink_header(raw_data)
             self.network_header, data = self.get_network_header(data)
             self.transport_header, data = self.get_transport_header(data)
             self.application_data = self.get_application_data(data)
@@ -780,10 +784,12 @@ class Packet():
             print("PACKET #{} / {}:{} -> {}:{} / ({})".format(num, self.network_header.src_ip, self.transport_header.src_port,  self.network_header.dst_ip, self.transport_header.dst_port, self.network_header.proto_str))
 
     def get_datalink_header(self, data):
-        if True:
+        if os.name == 'nt':
+            eth = DataLinkHeader(data)
+            return eth, eth.data
+        else:
             eth = EthernetHeader(data)
             return eth, eth.data
-        return None, None
 
     def get_network_header(self, data):
         if len(data)==0:

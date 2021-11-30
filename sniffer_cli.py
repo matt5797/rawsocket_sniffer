@@ -6,7 +6,17 @@ class Sniffer():
     def __init__(self):
         self.hostname = gethostname()
         self.host = gethostbyname(self.hostname)
-        self.sniffer = socket(AF_PACKET, SOCK_RAW, ntohs(0x0003))
+        if os.name == 'nt':
+            addr_family = AF_INET
+            socket_protocol = IPPROTO_IP
+        else:
+            addr_family = AF_PACKET
+            socket_protocol = ntohs(0x0003)
+        self.sniffer = socket(addr_family, SOCK_RAW, socket_protocol)
+        if os.name == 'nt':
+            self.sniffer.bind((self.host, 0))
+            self.sniffer.setsockopt(IPPROTO_IP, IP_HDRINCL, 1)
+            self.sniffer.ioctl(SIO_RCVALL, RCVALL_ON)
         self.packets = []
 
     def sniffing(self, opts, cnt, summary=False, silence=False):

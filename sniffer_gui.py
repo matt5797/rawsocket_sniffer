@@ -7,6 +7,7 @@ import time
 from argparse import ArgumentParser
 import json
 import re
+import os
 
 
 def argparser():
@@ -64,7 +65,18 @@ class Sniffer(QThread):
         self.table = table
         self.cnt = args.number
         self.opts = (args.necessary_proto, args.except_proto, args.sorceport, args.destport, args.display_layer)
-        self.sniffer = socket(AF_PACKET, SOCK_RAW, ntohs(0x0003))
+        self.host = gethostbyname(gethostname())
+        if os.name == 'nt':
+            addr_family = AF_INET
+            socket_protocol = IPPROTO_IP
+        else:
+            addr_family = AF_PACKET
+            socket_protocol = ntohs(0x0003)
+        self.sniffer = socket(addr_family, SOCK_RAW, socket_protocol)
+        if os.name == 'nt':
+            self.sniffer.bind((self.host, 0))
+            self.sniffer.setsockopt(IPPROTO_IP, IP_HDRINCL, 1)
+            self.sniffer.ioctl(SIO_RCVALL, RCVALL_ON)
         self.packet_num = 0
         self.time_start = time.time()
         self.filter = {
