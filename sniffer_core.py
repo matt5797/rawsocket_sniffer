@@ -726,10 +726,11 @@ class Packet():
             return False
         if opts[1] and len(set(types).intersection(set(opts[1])))>0:
             return False
-        if opts[2] and self.transport_header and (self.transport_header.src_port not in opts[2] and self.transport_header.dst_port not in opts[3]):
+        if opts[2] and self.transport_header and (self.transport_header.src_port not in opts[2]):
             return False
-        else:
-            return True
+        if opts[3] and self.transport_header and (self.transport_header.dst_port not in opts[3]):
+            return False
+        return True
 
     def dump(self, num=0, opts=['datalink', 'network', 'transport', 'application']):
         print_section_header("PACKET {}".format(num), 2)
