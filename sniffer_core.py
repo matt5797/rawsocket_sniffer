@@ -646,37 +646,40 @@ class HTTPData(ApplicationData):
         self.payload_raw = payload
         self.payload = payload.decode('ascii')
 
-        try:
-            headers, body = self.payload.split('\r\n\r\n')
-        except Exception as ex:
-            print("=========http frame error==========")
-            print("payload len: {}".format(len(self.payload)))
-            print("payload: "+self.payload)
-            print("===================================")
-            headers = self.payload
-            body = None
-        headers = headers.split('\r\n')
-        start_line = headers.pop(0).split(' ')
-
-        self.result = {'type': self.type}
-        if start_line[0] in ['POST', 'GET', 'HEAD', 'PUT', 'DELETE']:
-            self.result['request'], self.result['headers'] = {}, {}
-            self.result['request']['method'], self.result['request']['url'], self.result['request']['version'] = start_line
-            for line in headers:
-                line = line.split(': ')
-                self.result['headers'][line[0]] = line[1]
-            self.result['body'] = body
-            self.protocol = self.result['request']['version']
-        elif start_line[0] in ['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0']:
-            self.result['response'], self.result['headers'] = {}, {}
-            self.result['response']['protocol'], self.result['response']['state_code'], self.result['response']['state_line'] = start_line
-            for line in headers:
-                line = line.split(': ')
-                self.result['headers'][line[0]] = line[1]
-            self.result['body'] = body
-            self.protocol = self.result['response']['protocol']
+        if len(self.payload_raw) <= 1:
+            self.result = {'type': self.type, 'body': self.payload_raw}
         else:
-            self.protocol = "Unknown HTTP"
+            try:
+                headers, body = self.payload.split('\r\n\r\n')
+            except Exception as ex:
+                print("=========http frame error==========")
+                print("payload len: {}".format(len(self.payload)))
+                print("payload: "+self.payload)
+                print("===================================")
+                headers = self.payload
+                body = None
+            headers = headers.split('\r\n')
+            start_line = headers.pop(0).split(' ')
+
+            self.result = {'type': self.type}
+            if start_line[0] in ['POST', 'GET', 'HEAD', 'PUT', 'DELETE']:
+                self.result['request'], self.result['headers'] = {}, {}
+                self.result['request']['method'], self.result['request']['url'], self.result['request']['version'] = start_line
+                for line in headers:
+                    line = line.split(': ')
+                    self.result['headers'][line[0]] = line[1]
+                self.result['body'] = body
+                self.protocol = self.result['request']['version']
+            elif start_line[0] in ['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0']:
+                self.result['response'], self.result['headers'] = {}, {}
+                self.result['response']['protocol'], self.result['response']['state_code'], self.result['response']['state_line'] = start_line
+                for line in headers:
+                    line = line.split(': ')
+                    self.result['headers'][line[0]] = line[1]
+                self.result['body'] = body
+                self.protocol = self.result['response']['protocol']
+            else:
+                self.protocol = "Unknown HTTP"
 
     def dump(self):
         if 'request' in self.result.keys():
@@ -687,10 +690,7 @@ class HTTPData(ApplicationData):
             print_section_header("headers", 0)
             for key, value in self.result['headers'].items():
                 print("{}: {}".format(key, value))
-
-            print_section_header("body", 0)
-            print("{}: {}".format('body', self.result['body']))
-        else:
+        elif 'response' in self.result.keys():
             print_section_header("HTTP RESPONSE", 1)
             for key, value in self.result['response'].items():
                 print("{}: {}".format(key, value))
@@ -698,9 +698,8 @@ class HTTPData(ApplicationData):
             print_section_header("headers", 0)
             for key, value in self.result['headers'].items():
                 print("{}: {}".format(key, value))
-
-            print_section_header("body", 0)
-            print("{}: {}".format('body', self.result['body']))
+        print_section_header("body", 0)
+        print("{}: {}".format('body', self.result['body']))
 
         print_section_footer(1)
 
@@ -713,6 +712,8 @@ class HTTPData(ApplicationData):
             return "{} {} {}".format(self.result['request']['method'], self.result['request']['url'], self.result['request']['version'])
         elif 'response' in self.result.keys():
             return "{} {} {}".format(self.result['response']['protocol'], self.result['response']['state_code'], self.result['response']['state_line'])
+        elif len(self.payload_raw) <= 1:
+            return "[keep-alive segment]"
 
 
 class Packet():
