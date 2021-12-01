@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from sniffer_core import *
@@ -58,13 +58,24 @@ def get_hex_dump(buffer, start_offset=0):
     return res
 
 
+class QCustomTableWidgetItem(QTableWidgetItem):
+    def __init__ (self, value):
+        super(QCustomTableWidgetItem, self).__init__(('%s' % value))
+
+    def __lt__ (self, other):
+        if (isinstance(other, QCustomTableWidgetItem)):
+            selfDataValue  = float(self.data(Qt.EditRole))
+            otherDataValue = float(other.data(Qt.EditRole))
+            return selfDataValue < otherDataValue
+        else:
+            return QTableWidgetItem.__lt__(self, other)
+
+
 class Sniffer(QThread):
-    def __init__(self, table, args):
+    def __init__(self, table):
         super(Sniffer, self).__init__()
         self.running = True
         self.table = table
-        self.cnt = args.number
-        self.opts = (args.necessary_proto, args.except_proto, args.sorceport, args.destport, args.display_layer)
         self.host = gethostbyname(gethostname())
         if os.name == 'nt':
             addr_family = AF_INET
@@ -83,11 +94,12 @@ class Sniffer(QThread):
             "eth": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
             "ip": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
             "tcp": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
-            "protocol": [],
+            "udp": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
+            "protocol": {"necessary": [], "except": []},
         }
 
     def run(self):
-        while self.running:# and self.packet_num<self.cnt:
+        while self.running:
             raw_data, addr = self.sniffer.recvfrom(65565)
             packet = Packet(raw_data)
             #if packet.is_filtered(self.opts):
@@ -100,8 +112,8 @@ class Sniffer(QThread):
 
     def pause(self):
         self.running = False
-    
-    def filter_change(self, filter_str):
+
+    def reset(self):
         self.pause()
         self.table.clear()
         self.packet_num = 0
@@ -112,6 +124,9 @@ class Sniffer(QThread):
             "udp": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
             "protocol": {"necessary": [], "except": []},
         }
+
+    def filter_change(self, filter_str):
+        self.reset()
         
         regex = """(?P<pre>and|or)*\s*((?P<opts>((?P<pro_name>eth|ip|tcp|udp).(?P<pro_tar>\w+))\s*(?P<opr>==|!=)\s*(?P<target>(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}|(?:[a-zA-Z0-9]{2}[:-]){5}[a-zA-Z0-9]{2}|\d+))|((?P<except>!*)(?P<protocol>eth|ip|udp|tcp|icmp|dns|http)))"""
 
@@ -290,8 +305,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.initUI()
-        self.args = argparser()
-        self.sniffer = Sniffer(self.packet_list, self.args)
+        self.sniffer = Sniffer(self.packet_list)
 
     def initUI(self):
         self.setWindowTitle('Sniffing program')
@@ -312,6 +326,11 @@ class MainWindow(QMainWindow):
         saveAction.setStatusTip('save log')
         saveAction.triggered.connect(self.packet_save)
 
+        loadAction = QAction(QIcon('res/load.jfif'), 'Load', self)
+        loadAction.setShortcut('Ctrl+L')
+        loadAction.setStatusTip('load log')
+        loadAction.triggered.connect(self.packet_load)
+
         stopAction = QAction(QIcon('res/stop.png'), 'Stop', self)
         stopAction.setShortcut('Ctrl+P')
         stopAction.setStatusTip('Stop sniffing')
@@ -324,6 +343,7 @@ class MainWindow(QMainWindow):
         menubar.setNativeMenuBar(False)
         filemenu = menubar.addMenu('&File')
         filemenu.addAction(saveAction)
+        filemenu.addAction(loadAction)
         filemenu.addAction(exitAction)
 
         capturemenu = menubar.addMenu('&Capture')
@@ -335,6 +355,7 @@ class MainWindow(QMainWindow):
         self.toolbar.addAction(startAction)
         self.toolbar.addAction(stopAction)
         self.toolbar.addAction(saveAction)
+        self.toolbar.addAction(loadAction)
         self.toolbar.addAction(exitAction)
 
         #filter line
@@ -371,6 +392,7 @@ class MainWindow(QMainWindow):
         if self.sniffer.running:
             self.sniffer.start()
         elif not self.sniffer.running:
+            self.sniffer.packet_num = len(self.packet_list.packet_list)
             self.sniffer.resume()
             self.sniffer.start()
 
@@ -379,9 +401,15 @@ class MainWindow(QMainWindow):
             self.sniffer.pause()
 
     def packet_save(self):
-        pass
-        #with open("logs/log.json", "w") as json_file:
-        #    json.dump(self.packet_list.packet_list, json_file)
+        with open("logs/log.json", "w") as json_file:
+            json.dump(self.packet_list.packet_list, json_file)
+            
+    def packet_load(self):
+        self.sniffer.reset()
+        with open("logs/log.json", "r") as json_file:
+            packet_list = json.load(json_file)
+        for packet in packet_list:
+            self.packet_list.add_packet(packet)
     
     def filter_btn_clicked(self):
         self.sniffer.filter_change(self.filter_str.text())
@@ -393,6 +421,7 @@ class PacketList(QWidget):
         self.initUI()
         self.packet_list = []
         self.main_window = main_window
+        self.order = [0, True]
 
     def initUI(self):
         self.tableWidget = QTableWidget(0, 7,
@@ -403,9 +432,12 @@ class PacketList(QWidget):
 
         self.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.tableWidget.horizontalHeader().setSectionResizeMode(6, QHeaderView.Stretch)
+        self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.tableWidget.verticalHeader().hide()
 
         self.tableWidget.cellClicked.connect(self.cell_clicked)
+        self.tableWidget.horizontalHeader().sectionClicked.connect(self.onHeaderClicked)
 
         layout = QVBoxLayout()
         layout.addWidget(self.tableWidget)
@@ -413,21 +445,46 @@ class PacketList(QWidget):
 
     @pyqtSlot(int, int)
     def cell_clicked(self, row, col):
-        self.main_window.packet_browser.print_packet(self.packet_list[row])
-        self.main_window.packet_bytes.print_packet(self.packet_list[row])
+        num = int(self.tableWidget.item(row, 0).text())
+        self.main_window.packet_browser.print_packet(self.packet_list[num])
+        self.main_window.packet_bytes.print_packet(self.packet_list[num])
+    
+    def onHeaderClicked(self, col):
+        if self.order[0]==col:
+            self.order[1] = not self.order[1]
+            self.tableWidget.sortItems(col, self.order[1])
+        else:
+            self.order[0]=col
+            self.order[1]=True
+            self.tableWidget.sortItems(col, self.order[1])
     
     def add_packet(self, data):
         self.packet_list.append(data)
         packet_json = data['packet']
         row = self.tableWidget.rowCount()
         self.tableWidget.insertRow(row)
-        self.tableWidget.setItem(row, 0, QTableWidgetItem(str(data['no'])))
-        self.tableWidget.setItem(row, 1, QTableWidgetItem(("%.5f" % data['time_since'])))
+        self.tableWidget.setItem(row, 0, QCustomTableWidgetItem(int(data['no'])))
+        self.tableWidget.setItem(row, 1, QCustomTableWidgetItem(float(("%.5f" % data['time_since']))))
         self.tableWidget.setItem(row, 2, QTableWidgetItem(str(packet_json['network_header']['src_ip'])))
         self.tableWidget.setItem(row, 3, QTableWidgetItem(str(packet_json['network_header']['dst_ip'])))
         self.tableWidget.setItem(row, 4, QTableWidgetItem(str(packet_json['protocol'])))
-        self.tableWidget.setItem(row, 5, QTableWidgetItem(str(packet_json['length'])))
+        self.tableWidget.setItem(row, 5, QCustomTableWidgetItem((int(packet_json['length']))))
         self.tableWidget.setItem(row, 6, QTableWidgetItem(packet_json['info']))
+        self.tableWidget.resizeColumnsToContents()
+
+    def resize(self):
+        header = self.tableWidget.horizontalHeader()
+        twidth = header.width()
+        rows = []
+        width = []
+        for column in range(header.count()):
+            header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
+            width.append(header.sectionSize(column))
+
+        wfactor = twidth / sum(width)
+        for column in rows:
+            header.setSectionResizeMode(column, QHeaderView.Interactive)
+            header.resizeSection(column, width[column]*wfactor)
     
     def clear(self):
         self.packet_list = []
@@ -450,8 +507,6 @@ class PacketBrowser(QWidget):
     
     def print_packet(self, packet):
         packet_json = packet['packet']
-
-        #res = "<html><details> {} {} </details></html>".format("<summary>more details</summary>", "<p>here is detail texts</p>")
         self.browser.clear()
         if 'datalink_header' in packet_json.keys():
             res = "<b> {} / {} </b>".format(packet_json['datalink_header']['type'], packet_json['datalink_header']['info'])
@@ -499,7 +554,7 @@ class PacketBytes(QWidget):
         self.setLayout(vbox)
     
     def print_packet(self, packet):
-        raw_data = packet['packet']['raw_data']
+        raw_data = bytes.fromhex(packet['packet']['raw_data'])
         self.browser.clear()
         res = get_hex_dump(raw_data)
         self.browser.append(res)

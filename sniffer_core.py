@@ -761,7 +761,7 @@ class Packet():
         print('\n')
 
     def get_json(self):
-        res = {"raw_data": self.raw_data, "length": len(self.raw_data), "protocol": "None", "info": self.get_info()}
+        res = {"raw_data": self.raw_data.hex(), "length": len(self.raw_data), "protocol": "None", "info": self.get_info()}
         if self.datalink_header:
             res['datalink_header'] = self.datalink_header.get_json()
             res['protocol'] = res['datalink_header']['type']
