@@ -109,10 +109,11 @@ class Sniffer(QThread):
             "eth": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
             "ip": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
             "tcp": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
-            "protocol": [],
+            "udp": {"src": {"necessary": [], "except": []}, "dst": {"necessary": [], "except": []}, "all": {"necessary": [], "except": []}},
+            "protocol": {"necessary": [], "except": []},
         }
         
-        regex = """(?P<pre>and|or)*\s*(((?P<protocol>ip|eth|tcp).(?P<pro_tar>\w+))\s*(?P<opr>==|!=)\s*(?P<target>(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}|(?:[a-zA-Z0-9]{2}[:-]){5}[a-zA-Z0-9]{2}|\d+))"""
+        regex = """(?P<pre>and|or)*\s*((?P<opts>((?P<pro_name>eth|ip|tcp|udp).(?P<pro_tar>\w+))\s*(?P<opr>==|!=)\s*(?P<target>(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}|(?:[a-zA-Z0-9]{2}[:-]){5}[a-zA-Z0-9]{2}|\d+))|((?P<except>!*)(?P<protocol>eth|ip|udp|tcp|icmp|dns|http)))"""
 
         match_list = re.finditer(regex, filter_str)
 
@@ -120,64 +121,103 @@ class Sniffer(QThread):
         for index, match in enumerate(match_list):
             res = match.groupdict()
             res_list[index] = res
-            print(match)
 
-            if res['protocol']=='eth':
-                if res['pro_tar'] == 'addr':
-                    if res['opr'] == '==':
-                        self.filter['eth']['all']['necessary'].append(res['target'])
-                    elif res['opr'] == '!=':
-                        self.filter['eth']['all']['except'].append(res['target'])
-                elif res['pro_tar'] == 'src':
-                    if res['opr'] == '==':
-                        self.filter['eth']['src']['necessary'].append(res['target'])
-                    elif res['opr'] == '!=':
-                        self.filter['eth']['src']['except'].append(res['target'])
-                elif res['pro_tar'] == 'dst':
-                    if res['opr'] == '==':
-                        self.filter['eth']['dst']['necessary'].append(res['target'])
-                    elif res['opr'] == '!=':
-                        self.filter['eth']['dst']['except'].append(res['target'])
-                self.filter['protocol'].append('eth')
-            elif res['protocol']=='ip':
-                if res['pro_tar'] == 'addr':
-                    if res['opr'] == '==':
-                        self.filter['ip']['all']['necessary'].append(res['target'])
-                    elif res['opr'] == '!=':
-                        self.filter['ip']['all']['except'].append(res['target'])
-                elif res['pro_tar'] == 'src':
-                    if res['opr'] == '==':
-                        self.filter['ip']['src']['necessary'].append(res['target'])
-                    elif res['opr'] == '!=':
-                        self.filter['ip']['src']['except'].append(res['target'])
-                elif res['pro_tar'] == 'dst':
-                    if res['opr'] == '==':
-                        self.filter['ip']['dst']['necessary'].append(res['target'])
-                    elif res['opr'] == '!=':
-                        self.filter['ip']['dst']['except'].append(res['target'])
-                self.filter['protocol'].append('ip')
-            elif res['protocol']=='tcp':
-                if res['pro_tar'] == 'port':
-                    if res['opr'] == '==':
-                        self.filter['tcp']['all']['necessary'].append(res['target'])
-                    elif res['opr'] == '!=':
-                        self.filter['tcp']['all']['except'].append(res['target'])
-                elif res['pro_tar'] == 'srcport':
-                    if res['opr'] == '==':
-                        self.filter['tcp']['src']['necessary'].append(res['target'])
-                    elif res['opr'] == '!=':
-                        self.filter['tcp']['src']['except'].append(res['target'])
-                elif res['pro_tar'] == 'dstport':
-                    if res['opr'] == '==':
-                        self.filter['tcp']['dst']['necessary'].append(res['target'])
-                    elif res['opr'] == '!=':
-                        self.filter['tcp']['dst']['except'].append(res['target'])
-                self.filter['protocol'].append('tcp')
-        print(self.filter)
+            if res['pro_name']:
+                if res['pro_name']=='eth':
+                    if res['pro_tar'] == 'addr':
+                        if res['opr'] == '==':
+                            self.filter['eth']['all']['necessary'].append(res['target'])
+                        elif res['opr'] == '!=':
+                            self.filter['eth']['all']['except'].append(res['target'])
+                    elif res['pro_tar'] == 'src':
+                        if res['opr'] == '==':
+                            self.filter['eth']['src']['necessary'].append(res['target'])
+                        elif res['opr'] == '!=':
+                            self.filter['eth']['src']['except'].append(res['target'])
+                    elif res['pro_tar'] == 'dst':
+                        if res['opr'] == '==':
+                            self.filter['eth']['dst']['necessary'].append(res['target'])
+                        elif res['opr'] == '!=':
+                            self.filter['eth']['dst']['except'].append(res['target'])
+                    self.filter['protocol']['necessary'].append('eth')
+                elif res['pro_name']=='ip':
+                    if res['pro_tar'] == 'addr':
+                        if res['opr'] == '==':
+                            self.filter['ip']['all']['necessary'].append(res['target'])
+                        elif res['opr'] == '!=':
+                            self.filter['ip']['all']['except'].append(res['target'])
+                    elif res['pro_tar'] == 'src':
+                        if res['opr'] == '==':
+                            self.filter['ip']['src']['necessary'].append(res['target'])
+                        elif res['opr'] == '!=':
+                            self.filter['ip']['src']['except'].append(res['target'])
+                    elif res['pro_tar'] == 'dst':
+                        if res['opr'] == '==':
+                            self.filter['ip']['dst']['necessary'].append(res['target'])
+                        elif res['opr'] == '!=':
+                            self.filter['ip']['dst']['except'].append(res['target'])
+                    self.filter['protocol']['necessary'].append('ip')
+                elif res['pro_name']=='tcp':
+                    if res['pro_tar'] == 'port':
+                        if res['opr'] == '==':
+                            self.filter['tcp']['all']['necessary'].append(int(res['target']))
+                        elif res['opr'] == '!=':
+                            self.filter['tcp']['all']['except'].append(int(res['target']))
+                    elif res['pro_tar'] == 'srcport':
+                        if res['opr'] == '==':
+                            self.filter['tcp']['src']['necessary'].append(int(res['target']))
+                        elif res['opr'] == '!=':
+                            self.filter['tcp']['src']['except'].append(int(res['target']))
+                    elif res['pro_tar'] == 'dstport':
+                        if res['opr'] == '==':
+                            self.filter['tcp']['dst']['necessary'].append(int(res['target']))
+                        elif res['opr'] == '!=':
+                            self.filter['tcp']['dst']['except'].append(int(res['target']))
+                    self.filter['protocol']['necessary'].append('tcp')
+                elif res['pro_name']=='udp':
+                    if res['pro_tar'] == 'port':
+                        if res['opr'] == '==':
+                            self.filter['udp']['all']['necessary'].append(int(res['target']))
+                        elif res['opr'] == '!=':
+                            self.filter['udp']['all']['except'].append(int(res['target']))
+                    elif res['pro_tar'] == 'srcport':
+                        if res['opr'] == '==':
+                            self.filter['udp']['src']['necessary'].append(int(res['target']))
+                        elif res['opr'] == '!=':
+                            self.filter['udp']['src']['except'].append(int(res['target']))
+                    elif res['pro_tar'] == 'dstport':
+                        if res['opr'] == '==':
+                            self.filter['udp']['dst']['necessary'].append(int(res['target']))
+                        elif res['opr'] == '!=':
+                            self.filter['udp']['dst']['except'].append(int(res['target']))
+                    self.filter['protocol']['necessary'].append('udp')
+            elif res['protocol']:
+                if res['protocol']=='eth':
+                    if res['except']:
+                        self.filter['protocol']['except'].append('eth')
+                    else:
+                        self.filter['protocol']['necessary'].append('eth')
+                elif res['protocol']=='ip':
+                    if res['except']:
+                        self.filter['protocol']['except'].append('ip')
+                    else:
+                        self.filter['protocol']['necessary'].append('ip')
+                elif res['protocol']=='tcp':
+                    if res['except']:
+                        self.filter['protocol']['except'].append('tcp')
+                    else:
+                        self.filter['protocol']['necessary'].append('tcp')
+                elif res['protocol']=='udp':
+                    if res['except']:
+                        self.filter['protocol']['except'].append('udp')
+                    else:
+                        self.filter['protocol']['necessary'].append('udp')
         self.resume()
 
     def is_filtered(self, packet):
         if 'datalink_header' in packet.keys() and packet['datalink_header']['type'] == 'Ethernet':
+            if 'eth' in self.filter['protocol']['except']:
+                return False
             if packet['datalink_header']['src_mac'] in self.filter['eth']['src']['except']:
                 return False
             if (len(self.filter['eth']['src']['necessary'])>0) and packet['datalink_header']['src_mac'] not in self.filter['eth']['src']['necessary']:
@@ -188,11 +228,13 @@ class Sniffer(QThread):
                 return False
             if (packet['datalink_header']['src_mac'] in self.filter['eth']['all']['except']) or (packet['datalink_header']['dst_mac'] in self.filter['eth']['all']['except']):
                 return False
-            if (len(self.filter['eth']['all']['necessary'])>0) and ((packet['datalink_header']['src_mac'] not in self.filter['eth']['all']['necessary']) or (packet['datalink_header']['dst_mac'] not in self.filter['eth']['all']['necessary'])):
+            if (len(self.filter['eth']['all']['necessary'])>0) and ((packet['datalink_header']['src_mac'] not in self.filter['eth']['all']['necessary']) and (packet['datalink_header']['dst_mac'] not in self.filter['eth']['all']['necessary'])):
                 return False
-        elif 'eth' in self.filter['protocol']:
+        elif 'eth' in self.filter['protocol']['necessary']:
             return False
         if 'network_header' in packet.keys() and packet['network_header']['type'] == 'IPv4':
+            if 'ip' in self.filter['protocol']['except']:
+                return False
             if packet['network_header']['src_ip'] in self.filter['ip']['src']['except']:
                 return False
             if (len(self.filter['ip']['src']['necessary'])>0) and packet['network_header']['src_ip'] not in self.filter['ip']['src']['necessary']:
@@ -203,11 +245,13 @@ class Sniffer(QThread):
                 return False
             if (packet['network_header']['src_ip'] in self.filter['ip']['all']['except']) or (packet['network_header']['dst_ip'] in self.filter['ip']['all']['except']):
                 return False
-            if (len(self.filter['ip']['all']['necessary'])>0) and ((packet['network_header']['src_ip'] not in self.filter['ip']['all']['necessary']) or (packet['network_header']['dst_ip'] not in self.filter['ip']['all']['necessary'])):
+            if (len(self.filter['ip']['all']['necessary'])>0) and ((packet['network_header']['src_ip'] not in self.filter['ip']['all']['necessary']) and (packet['network_header']['dst_ip'] not in self.filter['ip']['all']['necessary'])):
                 return False
-        elif 'ip' in self.filter['protocol']:
+        elif 'ip' in self.filter['protocol']['necessary']:
             return False
         if 'transport_header' in packet.keys() and packet['transport_header']['type'] == 'TCP':
+            if 'tcp' in self.filter['protocol']['except']:
+                return False
             if packet['transport_header']['src_port'] in self.filter['tcp']['src']['except']:
                 return False
             if (len(self.filter['tcp']['src']['necessary'])>0) and packet['transport_header']['src_port'] not in self.filter['tcp']['src']['necessary']:
@@ -218,9 +262,26 @@ class Sniffer(QThread):
                 return False
             if (packet['transport_header']['src_port'] in self.filter['tcp']['all']['except']) or (packet['transport_header']['dst_port'] in self.filter['tcp']['all']['except']):
                 return False
-            if (len(self.filter['tcp']['all']['necessary'])>0) and ((packet['transport_header']['src_port'] not in self.filter['tcp']['all']['necessary']) or (packet['transport_header']['dst_port'] not in self.filter['tcp']['all']['necessary'])):
+            if (len(self.filter['tcp']['all']['necessary'])>0) and ((packet['transport_header']['src_port'] not in self.filter['tcp']['all']['necessary']) and (packet['transport_header']['dst_port'] not in self.filter['tcp']['all']['necessary'])):
                 return False
-        elif 'tcp' in self.filter['protocol']:
+        elif 'tcp' in self.filter['protocol']['necessary']:
+            return False
+        if 'transport_header' in packet.keys() and packet['transport_header']['type'] == 'UDP':
+            if 'udp' in self.filter['protocol']['except']:
+                return False
+            if packet['transport_header']['src_port'] in self.filter['udp']['src']['except']:
+                return False
+            if (len(self.filter['udp']['src']['necessary'])>0) and packet['transport_header']['src_port'] not in self.filter['udp']['src']['necessary']:
+                return False
+            if packet['transport_header']['dst_port'] in self.filter['udp']['dst']['except']:
+                return False
+            if (len(self.filter['udp']['dst']['necessary'])>0) and packet['transport_header']['dst_port'] not in self.filter['udp']['dst']['necessary']:
+                return False
+            if (packet['transport_header']['src_port'] in self.filter['udp']['all']['except']) or (packet['transport_header']['dst_port'] in self.filter['udp']['all']['except']):
+                return False
+            if (len(self.filter['udp']['all']['necessary'])>0) and ((packet['transport_header']['src_port'] not in self.filter['udp']['all']['necessary']) and (packet['transport_header']['dst_port'] not in self.filter['udp']['all']['necessary'])):
+                return False
+        elif 'udp' in self.filter['protocol']['necessary']:
             return False
         return True
 

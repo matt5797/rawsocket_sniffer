@@ -646,7 +646,15 @@ class HTTPData(ApplicationData):
         self.payload_raw = payload
         self.payload = payload.decode('ascii')
 
-        headers, body = self.payload.split('\r\n\r\n')
+        try:
+            headers, body = self.payload.split('\r\n\r\n')
+        except Exception as ex:
+            print("=========http frame error==========")
+            print("payload len: {}".format(len(self.payload)))
+            print("payload: "+self.payload)
+            print("===================================")
+            headers = self.payload
+            body = None
         headers = headers.split('\r\n')
         start_line = headers.pop(0).split(' ')
 
