@@ -311,10 +311,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('Sniffing program')
 
         #actions
-        startAction = QAction(QIcon('res/start.png'), 'Start', self)
-        startAction.setShortcut('Ctrl+E')
-        startAction.setStatusTip('Start sniffing')
-        startAction.triggered.connect(self.sniffing_start)
+        self.startAction = QAction(QIcon('res/start.png'), 'Start', self)
+        self.startAction.setShortcut('Ctrl+E')
+        self.startAction.setStatusTip('Start sniffing')
+        self.startAction.triggered.connect(self.sniffing_start)
 
         exitAction = QAction(QIcon('res/quit.png'), 'Exit', self)
         exitAction.setShortcut('Ctrl+Q')
@@ -331,10 +331,11 @@ class MainWindow(QMainWindow):
         loadAction.setStatusTip('load log')
         loadAction.triggered.connect(self.packet_load)
 
-        stopAction = QAction(QIcon('res/stop.png'), 'Stop', self)
-        stopAction.setShortcut('Ctrl+P')
-        stopAction.setStatusTip('Stop sniffing')
-        stopAction.triggered.connect(self.sniffing_stop)
+        self.stopAction = QAction(QIcon('res/stop.png'), 'Stop', self)
+        self.stopAction.setShortcut('Ctrl+P')
+        self.stopAction.setStatusTip('Stop sniffing')
+        self.stopAction.triggered.connect(self.sniffing_stop)
+        self.stopAction.setEnabled(False)
 
         self.statusBar()
 
@@ -347,13 +348,13 @@ class MainWindow(QMainWindow):
         filemenu.addAction(exitAction)
 
         capturemenu = menubar.addMenu('&Capture')
-        capturemenu.addAction(startAction)
-        capturemenu.addAction(stopAction)
+        capturemenu.addAction(self.startAction)
+        capturemenu.addAction(self.stopAction)
 
         #tool bar
         self.toolbar = self.addToolBar('Exit')
-        self.toolbar.addAction(startAction)
-        self.toolbar.addAction(stopAction)
+        self.toolbar.addAction(self.startAction)
+        self.toolbar.addAction(self.stopAction)
         self.toolbar.addAction(saveAction)
         self.toolbar.addAction(loadAction)
         self.toolbar.addAction(exitAction)
@@ -376,12 +377,15 @@ class MainWindow(QMainWindow):
         self.packet_bytes = PacketBytes(self)
 
         layout = QVBoxLayout()
-        layout.addWidget(filter_widget)
-        layout.addWidget(self.packet_list)
-        layout.addWidget(self.packet_browser)
-        layout.addWidget(self.packet_bytes)
+
+        splitter = QSplitter(Qt.Vertical)
+        splitter.addWidget(filter_widget)
+        splitter.addWidget(self.packet_list)
+        splitter.addWidget(self.packet_browser)
+        splitter.addWidget(self.packet_bytes)
 
         widget = QWidget()
+        layout.addWidget(splitter)
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
@@ -389,6 +393,8 @@ class MainWindow(QMainWindow):
         self.show()
 
     def sniffing_start(self):
+        self.startAction.setEnabled(False)
+        self.stopAction.setEnabled(True)
         if self.sniffer.running:
             self.sniffer.start()
         elif not self.sniffer.running:
@@ -397,19 +403,33 @@ class MainWindow(QMainWindow):
             self.sniffer.start()
 
     def sniffing_stop(self):
+        self.startAction.setEnabled(True)
+        self.stopAction.setEnabled(False)
         if self.sniffer.running:
             self.sniffer.pause()
 
     def packet_save(self):
-        with open("logs/log.json", "w") as json_file:
-            json.dump(self.packet_list.packet_list, json_file)
+        filesave = QFileDialog.getSaveFileName(self, 'Save file', './logs/', "*.json")
+        if filesave[0]:
+            with open(filesave[0], "w") as json_file:
+                json.dump(self.packet_list.packet_list, json_file)
             
     def packet_load(self):
         self.sniffer.reset()
-        with open("logs/log.json", "r") as json_file:
-            packet_list = json.load(json_file)
-        for packet in packet_list:
-            self.packet_list.add_packet(packet)
+        fileopen = QFileDialog.getOpenFileName(self, 'Open file', './logs/', "*.json")
+        if fileopen[0]:
+            with open(fileopen[0], "r") as json_file:
+                packet_list = json.load(json_file)
+            try:
+                for packet in packet_list:
+                    self.packet_list.add_packet(packet)
+            except Exception as ex:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("File load Error")
+                msg.setInformativeText('Wrong File Load')
+                msg.setWindowTitle("Error")
+                msg.exec_()
     
     def filter_btn_clicked(self):
         self.sniffer.filter_change(self.filter_str.text())
