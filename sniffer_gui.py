@@ -10,23 +10,6 @@ import re
 import os
 
 
-def argparser():
-    parser = ArgumentParser()
-    parser.add_argument('-s', '--summary', action='store_true', help='summary mode')
-    parser.add_argument('-sl', '--silence', action='store_true', help='silence mode')
-
-    parser.add_argument('-n', '--number', type=int, help='packet number', default=1000)
-    parser.add_argument('-sp', '--sorceport', action='append', type=int, help='sorce port')
-    parser.add_argument('-dp', '--destport', action='append', type=int, help='destination port')
-
-    parser.add_argument('-np', '--necessary_proto', action='append', type=str, help='necessary protocol: [Ethernet, IP, ICMP, TCP, UDP]')
-    parser.add_argument('-ep', '--except_proto', action='append', type=str, help='except protocol: [Ethernet, IP, ICMP, TCP, UDP]')
-
-    parser.add_argument('-dl', '--display_layer', action='append', type=str, help='display layer: [datalink, network, transport, application]')
-
-    return parser.parse_args()
-
-
 def get_hex_dump(buffer, start_offset=0):
     offset = 0
     res = ""
