@@ -230,13 +230,11 @@ class ICMPHeader(TransportHeader):
         self.check_sum = hdr_unpacked[2]
         self.message = hdr_unpacked[3]
         if len(data[8:]) > 0:
-            self.message2 = data[8:]
+            self.message2 = data[8:].decode()
         else:
             self.message2 = None
         self.hdr_size = len(data)
         self.data = data[self.hdr_size:]
-        self.src_port = 0
-        self.dst_port = 0
 
     def dump(self):
         print_section_header("IP HEADER", 1)
@@ -249,8 +247,7 @@ class ICMPHeader(TransportHeader):
         print_section_footer(1)
 
     def get_json(self):
-        return {'type': self.type, 'icmp_type': self.icmp_type, 'icmp_code': self.icmp_code, 'check_sum': self.check_sum,
-                'message': self.message, 'message2': self.message2, 'hdr_size': self.hdr_size, 'info': self.get_info()}
+        return {'type': self.type, 'icmp_type': "{} ({})".format(self.icmp_type, self.get_icmp_type()), 'icmp_code': "{} ({})".format(self.icmp_code, self.get_icmp_code()), 'check_sum': self.check_sum, 'message': self.message, 'message2': self.message2, 'hdr_size': self.hdr_size, 'info': self.get_info()}
 
     def get_info(self):
         return "{} ({})".format(self.icmp_type, self.icmp_code)
@@ -544,7 +541,7 @@ class DNSMessage(DNS):
         values = {'name': self.name, 'type': self.type_str, 'qclass': self.qclass, 'ttl': self.ttl, 'info': self.get_info()}
 
         if self.type_str == "A":
-            values['rdata2'] = self.rdata2
+            values['rdata2'] = self.rdata2.hex()
         elif self.type_str == "PTR":
             values['PTRDName'] = self.PTRDName
         elif self.type_str == "SOA":
@@ -563,7 +560,7 @@ class DNSMessage(DNS):
             values['Preference'] = self.Preference
             values['Exchange'] = self.Exchange
         elif self.type_str == "AAAA":
-            values['rdata2'] = self.rdata2
+            values['rdata2'] = self.rdata2.hex()
         
         return values
 
@@ -646,18 +643,8 @@ class HTTPData(ApplicationData):
         self.payload_raw = payload
         self.payload = payload.decode('ascii')
 
-        if len(self.payload_raw) <= 1:
-            self.result = {'type': self.type, 'body': self.payload_raw}
-        else:
-            try:
-                headers, body = self.payload.split('\r\n\r\n')
-            except Exception as ex:
-                print("=========http frame error==========")
-                print("payload len: {}".format(len(self.payload)))
-                print("payload: "+self.payload)
-                print("===================================")
-                headers = self.payload
-                body = None
+        if len(self.payload.split('\r\n\r\n'))==2:
+            headers, body = self.payload.split('\r\n\r\n')
             headers = headers.split('\r\n')
             start_line = headers.pop(0).split(' ')
 
@@ -668,7 +655,7 @@ class HTTPData(ApplicationData):
                 for line in headers:
                     line = line.split(': ')
                     self.result['headers'][line[0]] = line[1]
-                self.result['body'] = body
+                self.result['body'] = {'body': body}
                 self.protocol = self.result['request']['version']
             elif start_line[0] in ['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0']:
                 self.result['response'], self.result['headers'] = {}, {}
@@ -676,10 +663,12 @@ class HTTPData(ApplicationData):
                 for line in headers:
                     line = line.split(': ')
                     self.result['headers'][line[0]] = line[1]
-                self.result['body'] = body
+                self.result['body'] = {'body': body}
                 self.protocol = self.result['response']['protocol']
             else:
                 self.protocol = "Unknown HTTP"
+        else:
+            self.result = {'type': self.type, 'data': self.payload_raw.hex()}
 
     def dump(self):
         if 'request' in self.result.keys():
@@ -699,7 +688,7 @@ class HTTPData(ApplicationData):
             for key, value in self.result['headers'].items():
                 print("{}: {}".format(key, value))
         print_section_header("body", 0)
-        print("{}: {}".format('body', self.result['body']))
+        print("{}: {}".format('body', self.result['body']['body']))
 
         print_section_footer(1)
 
@@ -714,6 +703,28 @@ class HTTPData(ApplicationData):
             return "{} {} {}".format(self.result['response']['protocol'], self.result['response']['state_code'], self.result['response']['state_line'])
         elif len(self.payload_raw) <= 1:
             return "[keep-alive segment]"
+
+
+class HTTPSData(ApplicationData):
+    def __init__(self, payload):
+        self.type = "HTTPS"
+        self.payload_raw = payload
+        self.payload = payload.hex()
+        self.length = len(payload)
+        
+        self.result = {'type': self.type, 'data': self.payload}
+
+    def dump(self):
+        print_section_header("HTTPS", 1)
+        print("{}: {}".format('length', self.length))
+        print("{}: {}".format('data', self.payload))
+        print_section_footer(1)
+
+    def get_json(self):
+        return {'type': self.type, 'length': self.length, 'data': self.payload, 'info': self.get_info()}
+
+    def get_info(self):
+        return "Encrypted HTTPS Data"
 
 
 class Packet():
@@ -829,7 +840,10 @@ class Packet():
                 return None
             elif (self.transport_header.src_port in [80,8080] or self.transport_header.dst_port in [80,8080]):
                 return HTTPData(data)
+            elif (self.transport_header.src_port in [443] or self.transport_header.dst_port in [443]):
+                return HTTPSData(data)
             elif (self.transport_header.src_port in [53] or self.transport_header.dst_port in [53]):
                 return DNSData(data)
+
         return None
 

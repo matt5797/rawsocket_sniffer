@@ -85,7 +85,6 @@ class Sniffer(QThread):
         while self.running:
             raw_data, addr = self.sniffer.recvfrom(65565)
             packet = Packet(raw_data)
-            #if packet.is_filtered(self.opts):
             if self.is_filtered(packet.get_json()):
                 self.table.add_packet({"no": self.packet_num, "time": time.time(), "time_since": (time.time() - self.time_start), "packet": packet.get_json()})
                 self.packet_num = self.packet_num + 1
@@ -111,7 +110,7 @@ class Sniffer(QThread):
     def filter_change(self, filter_str):
         self.reset()
         
-        regex = """(?P<pre>and|or)*\s*((?P<opts>((?P<pro_name>eth|ip|tcp|udp).(?P<pro_tar>\w+))\s*(?P<opr>==|!=)\s*(?P<target>(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}|(?:[a-zA-Z0-9]{2}[:-]){5}[a-zA-Z0-9]{2}|\d+))|((?P<except>!*)(?P<protocol>eth|ip|udp|tcp|icmp|dns|http)))"""
+        regex = """(?P<pre>and|or)*\s*((?P<opts>((?P<pro_name>eth|ip|tcp|udp).(?P<pro_tar>\w+))\s*(?P<opr>==|!=)\s*(?P<target>(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}|(?:[a-zA-Z0-9]{2}[:-]){5}[a-zA-Z0-9]{2}|\d+))|((?P<except>!*)(?P<protocol>eth|ip|udp|tcp|icmp|dns|https|http)))"""
 
         match_list = re.finditer(regex, filter_str)
 
@@ -210,6 +209,26 @@ class Sniffer(QThread):
                         self.filter['protocol']['except'].append('udp')
                     else:
                         self.filter['protocol']['necessary'].append('udp')
+                elif res['protocol']=='icmp':
+                    if res['except']:
+                        self.filter['protocol']['except'].append('icmp')
+                    else:
+                        self.filter['protocol']['necessary'].append('icmp')
+                elif res['protocol']=='dns':
+                    if res['except']:
+                        self.filter['protocol']['except'].append('dns')
+                    else:
+                        self.filter['protocol']['necessary'].append('dns')
+                elif res['protocol']=='http':
+                    if res['except']:
+                        self.filter['protocol']['except'].append('http')
+                    else:
+                        self.filter['protocol']['necessary'].append('http')
+                elif res['protocol']=='https':
+                    if res['except']:
+                        self.filter['protocol']['except'].append('https')
+                    else:
+                        self.filter['protocol']['necessary'].append('https')
         self.resume()
 
     def is_filtered(self, packet):
@@ -281,6 +300,26 @@ class Sniffer(QThread):
                 return False
         elif 'udp' in self.filter['protocol']['necessary']:
             return False
+        if 'transport_header' in packet.keys() and packet['transport_header']['type'] == 'ICMP':
+            if 'icmp' in self.filter['protocol']['except']:
+                return False
+        elif 'icmp' in self.filter['protocol']['necessary']:
+            return False
+        if 'application_data' in packet.keys() and packet['application_data']['type'] == 'DNS':
+            if 'dns' in self.filter['protocol']['except']:
+                return False
+        elif 'dns' in self.filter['protocol']['necessary']:
+            return False
+        if 'application_data' in packet.keys() and packet['application_data']['type'] == 'HTTP':
+            if 'http' in self.filter['protocol']['except']:
+                return False
+        elif 'http' in self.filter['protocol']['necessary']:
+            return False
+        if 'application_data' in packet.keys() and packet['application_data']['type'] == 'HTTPS':
+            if 'https' in self.filter['protocol']['except']:
+                return False
+        elif 'https' in self.filter['protocol']['necessary']:
+            return False
         return True
 
 
@@ -294,12 +333,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('Sniffing program')
 
         #actions
-        self.startAction = QAction(QIcon('res/start.png'), 'Start', self)
+        self.startAction = QAction(QIcon('res/play.png'), 'Start', self)
         self.startAction.setShortcut('Ctrl+E')
         self.startAction.setStatusTip('Start sniffing')
         self.startAction.triggered.connect(self.sniffing_start)
 
-        exitAction = QAction(QIcon('res/quit.png'), 'Exit', self)
+        exitAction = QAction(QIcon('res/shutdown.png'), 'Exit', self)
         exitAction.setShortcut('Ctrl+Q')
         exitAction.setStatusTip('Exit application')
         exitAction.triggered.connect(qApp.quit)
@@ -309,12 +348,12 @@ class MainWindow(QMainWindow):
         saveAction.setStatusTip('save log')
         saveAction.triggered.connect(self.packet_save)
 
-        loadAction = QAction(QIcon('res/load.jfif'), 'Load', self)
+        loadAction = QAction(QIcon('res/folder.png'), 'Load', self)
         loadAction.setShortcut('Ctrl+L')
         loadAction.setStatusTip('load log')
         loadAction.triggered.connect(self.packet_load)
 
-        self.stopAction = QAction(QIcon('res/stop.png'), 'Stop', self)
+        self.stopAction = QAction(QIcon('res/pause.png'), 'Stop', self)
         self.stopAction.setShortcut('Ctrl+P')
         self.stopAction.setStatusTip('Stop sniffing')
         self.stopAction.triggered.connect(self.sniffing_stop)
@@ -501,8 +540,16 @@ class PacketBrowser(QWidget):
         self.main_window = main_window
 
     def initUI(self):
-        self.browser = QTextBrowser()
-        self.browser.setAcceptRichText(True)
+        self.browser = QTreeWidget()
+        self.browser.setColumnCount(2)
+        self.browser.setHeaderLabels(["Key", "Value"])
+        self.browser.header().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.browser.setAlternatingRowColors(True)
+        self.browser.header().setVisible(False)
+
+        self.font1 = QFont()
+        self.font1.setBold(True)
+        self.font1.setPointSize(10)
 
         vbox = QVBoxLayout()
         vbox.addWidget(self.browser, 1)
@@ -511,35 +558,44 @@ class PacketBrowser(QWidget):
     def print_packet(self, packet):
         packet_json = packet['packet']
         self.browser.clear()
-        if 'datalink_header' in packet_json.keys():
-            res = "<b> {} / {} </b>".format(packet_json['datalink_header']['type'], packet_json['datalink_header']['info'])
-            self.browser.append(res)
-            res = self.print_json(packet_json['datalink_header'])
-            self.browser.append(res)
+        if 'datalink_header' in packet_json.keys():# and packet_json['datalink_header']:
+            datalink_header = QTreeWidgetItem(self.browser)
+            datalink_header.setText(0, packet_json['datalink_header']['type'])
+            datalink_header.setText(1, packet_json['datalink_header']['info'])
+            datalink_header.setFont(0, self.font1)
+            datalink_header.setFont(1, self.font1)
+            self.print_json(datalink_header, packet_json['datalink_header'])
         if 'network_header' in packet_json.keys():
-            self.browser.append("{:=^78}".format(""))
-            res = "<b> {} / {} </b>".format(packet_json['network_header']['type'], packet_json['network_header']['info'])
-            self.browser.append(res)
-            res = self.print_json(packet_json['network_header'])
-            self.browser.append(res)
+            network_header = QTreeWidgetItem(self.browser)
+            network_header.setText(0, packet_json['network_header']['type'])
+            network_header.setText(1, packet_json['network_header']['info'])
+            network_header.setFont(0, self.font1)
+            network_header.setFont(1, self.font1)
+            self.print_json(network_header, packet_json['network_header'])
         if 'transport_header' in packet_json.keys():
-            self.browser.append("{:=^78}".format(""))
-            res = "<b> {} / {} </b>".format(packet_json['transport_header']['type'], packet_json['transport_header']['info'])
-            self.browser.append(res)
-            res = self.print_json(packet_json['transport_header'])
-            self.browser.append(res)
+            transport_header = QTreeWidgetItem(self.browser)
+            transport_header.setText(0, packet_json['transport_header']['type'])
+            transport_header.setText(1, packet_json['transport_header']['info'])
+            transport_header.setFont(0, self.font1)
+            transport_header.setFont(1, self.font1)
+            self.print_json(transport_header, packet_json['transport_header'])
         if 'application_data' in packet_json.keys():
-            self.browser.append("{:=^78}".format(""))
-            res = "<b> {} / {} </b>".format(packet_json['application_data']['type'], packet_json['application_data']['info'])
-            self.browser.append(res)
-            res = self.print_json(packet_json['application_data'])
-            self.browser.append(res)
+            application_data = QTreeWidgetItem(self.browser)
+            application_data.setText(0, packet_json['application_data']['type'])
+            application_data.setText(1, packet_json['application_data']['info'])
+            application_data.setFont(0, self.font1)
+            application_data.setFont(1, self.font1)
+            self.print_json(application_data, packet_json['application_data'])
 
-    def print_json(self, ori):
-        res = ""
-        for i in ori:
-            res = res + "{}: {}\n".format(str(i), str(ori[i]))
-        return res
+    def print_json(self, tree, ori_dict):
+        for key in ori_dict:
+            if str(key)!="info":
+                detail = QTreeWidgetItem(tree, [str(key), str(ori_dict[key])])
+            if type(ori_dict[key]) == dict:
+                self.print_json(detail, ori_dict[key])
+            elif type(ori_dict[key]) == list:
+                for index, value in enumerate(ori_dict[key]):
+                    self.print_json(QTreeWidgetItem(detail, [str(index), str(value)]), value)
 
 
 class PacketBytes(QWidget):
