@@ -641,9 +641,9 @@ class HTTPData(ApplicationData):
     def __init__(self, payload):
         self.type = "HTTP"
         self.payload_raw = payload
-        self.payload = payload.decode('ascii')
 
-        if len(self.payload.split('\r\n\r\n'))==2:
+        try:
+            self.payload = payload.decode('ascii')
             headers, body = self.payload.split('\r\n\r\n')
             headers = headers.split('\r\n')
             start_line = headers.pop(0).split(' ')
@@ -667,7 +667,7 @@ class HTTPData(ApplicationData):
                 self.protocol = self.result['response']['protocol']
             else:
                 self.protocol = "Unknown HTTP"
-        else:
+        except:
             self.result = {'type': self.type, 'data': self.payload_raw.hex()}
 
     def dump(self):
@@ -703,6 +703,8 @@ class HTTPData(ApplicationData):
             return "{} {} {}".format(self.result['response']['protocol'], self.result['response']['state_code'], self.result['response']['state_line'])
         elif len(self.payload_raw) <= 1:
             return "[keep-alive segment]"
+        else:
+            return "data length: {}".format(len(self.payload_raw))
 
 
 class HTTPSData(ApplicationData):
